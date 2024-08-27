@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Absolute Value Example</title>
+</head>
+<body>
+    <div>
+        <p>原始值：{{ player.value }}</p>
+        <p></p>
+    </div>
+
+    <script>
+        // 假设有一个 player 对象
+        const player = {
+            value: -10
+        };
+
+
+
+        // 更新绝对值到页面
+        document.querySelector('p:nth-child(2)').textContent = `绝对值::${Math.abs(player.value)}`;
+    </script>
+</body>
+</html>
