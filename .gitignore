@@ -19,7 +19,6 @@ debug/*
 *.DS_Store
 data
 !src/tools/eval_kitti_track/data
-!src
 exp
 exp/*
 *.json

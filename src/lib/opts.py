@@ -80,10 +80,10 @@ class opts(object):
         self.parser.add_argument('--show_trace', action='store_true')
 
         # model
-        self.parser.add_argument('--arch', default='dla_34',
+        self.parser.add_argument('--arch', default='aff_50',
                                  help='model architecture. Currently tested'
                                       'res_18 | res_101 | resdcn_18 | resdcn_101 |'
-                                      'dlav0_34 | dla_34 | hourglass')
+                                      'dlav0_34 | dla_34 | hourglass | aff_101| aff_50')
         self.parser.add_argument('--dla_node', default='dcn')
         self.parser.add_argument('--head_conv', type=int, default=-1,
                                  help='conv layer channels for output head'

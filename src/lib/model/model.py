@@ -12,13 +12,14 @@ from .networks.resdcn import PoseResDCN
 from .networks.resnet import PoseResNet
 from .networks.dlav0 import DLASegv0
 from .networks.generic_network import GenericNetwork
-
+from .networks.aff_resdcn import PoseAFFResDCN
 _network_factory = {
   'resdcn': PoseResDCN,
   'dla': DLASeg,
   'res': PoseResNet,
   'dlav0': DLASegv0,
-  'generic': GenericNetwork
+  'generic': GenericNetwork,
+  'aff': PoseAFFResDCN
 }
 
 def create_model(arch, head, head_conv, opt=None):
