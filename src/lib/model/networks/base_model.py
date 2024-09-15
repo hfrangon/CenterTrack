@@ -22,8 +22,8 @@ class BaseModel(nn.Module):
           head_kernel = 3
         self.num_stacks = num_stacks
         self.heads = heads
-        # todo 如果要对head做heatmap attention的话在这里加入
         # heads dic存入的是head的名字和对应的类别数(输出的通道数)
+        # 表示的是最后的输出的head的名字和对应的类别数，通过三个不同的head来生成不同的输出 heatmap, wh, reg
         # head_convs dic存入的是head的名字和对应的输入卷积层的通道数 256
         for head in self.heads:
             classes = self.heads[head]

@@ -163,6 +163,7 @@ class Root(nn.Module):
 
     def forward(self, *x):
         children = x
+        # 沿着通道方向进行拼接，将所有的输入x按通道拼接
         x = self.conv(torch.cat(x, 1))
         x = self.bn(x)
         if self.residual:
@@ -304,11 +305,14 @@ class DLA(nn.Module):
             inplanes = planes
         return nn.Sequential(*modules)
 
+    # todo 应该是在这里做输入和heatmap 以及前一个img的融合
     def forward(self, x, pre_img=None, pre_hm=None):
         y = []
         x = self.base_layer(x)
         if pre_img is not None:
             x = x + self.pre_img_layer(pre_img)
+        # 在这里做一个aff的特征融合
+        # 融合完了之后再做transformer再进行下一步的特征提取
         if pre_hm is not None:
             x = x + self.pre_hm_layer(pre_hm)
         for i in range(6):
@@ -340,7 +344,7 @@ def dla34(pretrained=True, **kwargs):  # DLA-34
         model.load_pretrained_model(
             data='imagenet', name='dla34', hash='ba72cf86')
     else:
-        print('Warning: No ImageNet pretrain!!')
+        print('Warning: Without ImageNet pretrain!!')
     return model
 
 def dla102(pretrained=None, **kwargs):  # DLA-102

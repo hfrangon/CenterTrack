@@ -16,15 +16,16 @@ import logging
 import torch
 import torch.nn as nn
 
-from .aff_net.fusion import AFF, iAFF, DAF
+from aff_net.fusion import AFF, iAFF, DAF
+from src.lib.opts import opts
 
 try:
-    from .DCNv2.dcn_v2 import DCN
+    from DCNv2.dcn_v2 import DCN
 except:
     print('Import DCN failed')
     DCN = None
 import torch.utils.model_zoo as model_zoo
-from .base_model import BaseModel
+from base_model import BaseModel
 
 BN_MOMENTUM = 0.1
 logger = logging.getLogger(__name__)
@@ -105,9 +106,9 @@ class Bottleneck(nn.Module):
         self.downsample = downsample
         self.stride = stride
         if fuse_type == 'AFF':
-            self.fuse_mode = AFF(channels=planes)
+            self.fuse_mode = AFF(channels=planes*self.expansion)
         elif fuse_type == 'iAFF':
-            self.fuse_mode = iAFF(channels=planes)
+            self.fuse_mode = iAFF(channels=planes*self.expansion)
         elif fuse_type == 'DAF':
             self.fuse_mode = DAF()
         else:
@@ -169,12 +170,13 @@ resnet_spec = {18: (BasicBlock, [2, 2, 2, 2]),
 
 class PoseAFFResDCN(BaseModel):
     # def __init__(self, block, layers, heads, head_conv):
-    def __init__(self, num_layers, heads, head_convs, _):
+    def __init__(self, num_layers, heads, head_convs, opt):
         assert head_convs['hm'][0] in [64, 256]
         super(PoseAFFResDCN, self).__init__(
-            heads, head_convs, 1, head_convs['hm'][0], opt=_)
+            heads, head_convs, 1, head_convs['hm'][0], opt=opt)
         block, layers = resnet_spec[num_layers]
         self.inplanes = 64
+        self.opt = opt
         self.deconv_with_bias = False
 
         self.conv1 = nn.Conv2d(3, 64, kernel_size=7, stride=2, padding=3,
@@ -186,7 +188,18 @@ class PoseAFFResDCN(BaseModel):
         self.layer2 = self._make_layer(block, 128, layers[1], stride=2)
         self.layer3 = self._make_layer(block, 256, layers[2], stride=2)
         self.layer4 = self._make_layer(block, 512, layers[3], stride=2)
-
+        if opt.pre_img:
+            self.pre_img_layer = nn.Sequential(
+                nn.Conv2d(3, 64, kernel_size=7, stride=2,
+                          padding=3, bias=False),
+                nn.BatchNorm2d(64, momentum=BN_MOMENTUM),
+                nn.ReLU(inplace=True))
+        if opt.pre_hm:
+            self.pre_hm_layer = nn.Sequential(
+                nn.Conv2d(1, 64, kernel_size=7, stride=2,
+                          padding=3, bias=False),
+                nn.BatchNorm2d(64, momentum=BN_MOMENTUM),
+                nn.ReLU(inplace=True))
         # used for deconv layers
         if head_convs['hm'][0] == 64:
             print('Using slimed resnet: 256 128 64 up channels.')
@@ -204,12 +217,30 @@ class PoseAFFResDCN(BaseModel):
                 [4, 4, 4],
             )
 
-        self.init_weights(num_layers, _.rgb)
+        self.init_weights(num_layers)
 
     def img2feats(self, x):
         x = self.conv1(x)
         x = self.bn1(x)
         x = self.relu(x)
+        x = self.maxpool(x)
+
+        x = self.layer1(x)
+        x = self.layer2(x)
+        x = self.layer3(x)
+        x = self.layer4(x)
+
+        x = self.deconv_layers(x)
+        return [x]
+
+    def imgpre2feats(self, x, pre_img=None, pre_hm=None):
+        x = self.conv1(x)
+        x = self.bn1(x)
+        x = self.relu(x)
+        if pre_img is not None:
+            x += self.pre_img_layer(pre_img)
+        if pre_hm is not None:
+           x += self.pre_hm_layer(pre_hm)
         x = self.maxpool(x)
 
         x = self.layer1(x)
@@ -305,3 +336,9 @@ class PoseAFFResDCN(BaseModel):
             if isinstance(m, nn.BatchNorm2d):
                 nn.init.constant_(m.weight, 1)
                 nn.init.constant_(m.bias, 0)
+from torchinfo import  summary
+
+if __name__ == '__main__':
+    opt = opts().parse()
+    model = PoseAFFResDCN(50, {'hm': 80, 'wh': 2, 'reg': 2}, {'hm': [256], 'wh': [256], 'reg': [256]}, opt=opt)
+    summary(model, input_size=(1, 3, 1920, 1080))

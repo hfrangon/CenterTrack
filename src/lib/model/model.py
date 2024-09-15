@@ -26,7 +26,7 @@ def create_model(arch, head, head_conv, opt=None):
   num_layers = int(arch[arch.find('_') + 1:]) if '_' in arch else 0
   arch = arch[:arch.find('_')] if '_' in arch else arch
   model_class = _network_factory[arch]
-  model = model_class(num_layers, heads=head, head_convs=head_conv, opt=opt)
+  model = model_class(num_layers=num_layers, heads=head, head_convs=head_conv,opt=opt)
   return model
 
 
