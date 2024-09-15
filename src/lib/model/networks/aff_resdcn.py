@@ -17,7 +17,7 @@ import torch
 import torch.nn as nn
 
 from .aff_net.fusion import AFF, iAFF, DAF
-from src.lib.opts import opts
+
 
 try:
     from .DCNv2.dcn_v2 import DCN
@@ -339,6 +339,7 @@ class PoseAFFResDCN(BaseModel):
 
 from torchinfo import  summary
 if __name__ == '__main__':
-    opt = opts().parse()
-    model = PoseAFFResDCN(50, {'hm': 80, 'wh': 2, 'reg': 2}, {'hm': [256], 'wh': [256], 'reg': [256]}, opt=opt)
-    summary(model, input_size=(1, 3, 1920, 1080))
+
+    # opt = opts().parse()
+    # model = PoseAFFResDCN(50, {'hm': 80, 'wh': 2, 'reg': 2}, {'hm': [256], 'wh': [256], 'reg': [256]}, opt=opt)
+    # summary(model, input_size=(1, 3, 1920, 1080))
