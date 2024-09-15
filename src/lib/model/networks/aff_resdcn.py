@@ -20,7 +20,7 @@ from .aff_net.fusion import AFF, iAFF, DAF
 
 
 try:
-    from .DCNv2.dcn_v2 import DCN
+    from DCNv2.dcn_v2 import DCN
 except:
     print('Import DCN failed')
     DCN = None
@@ -338,7 +338,6 @@ class PoseAFFResDCN(BaseModel):
                 nn.init.constant_(m.bias, 0)
 
 from torchinfo import  summary
-if __name__ == '__main__':
 
     # opt = opts().parse()
     # model = PoseAFFResDCN(50, {'hm': 80, 'wh': 2, 'reg': 2}, {'hm': [256], 'wh': [256], 'reg': [256]}, opt=opt)
