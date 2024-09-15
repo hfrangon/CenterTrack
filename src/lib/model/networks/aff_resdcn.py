@@ -16,16 +16,16 @@ import logging
 import torch
 import torch.nn as nn
 
-from aff_net.fusion import AFF, iAFF, DAF
+from .aff_net.fusion import AFF, iAFF, DAF
 from src.lib.opts import opts
 
 try:
-    from DCNv2.dcn_v2 import DCN
+    from .DCNv2.dcn_v2 import DCN
 except:
     print('Import DCN failed')
     DCN = None
 import torch.utils.model_zoo as model_zoo
-from base_model import BaseModel
+from .base_model import BaseModel
 
 BN_MOMENTUM = 0.1
 logger = logging.getLogger(__name__)
@@ -336,8 +336,8 @@ class PoseAFFResDCN(BaseModel):
             if isinstance(m, nn.BatchNorm2d):
                 nn.init.constant_(m.weight, 1)
                 nn.init.constant_(m.bias, 0)
-from torchinfo import  summary
 
+from torchinfo import  summary
 if __name__ == '__main__':
     opt = opts().parse()
     model = PoseAFFResDCN(50, {'hm': 80, 'wh': 2, 'reg': 2}, {'hm': [256], 'wh': [256], 'reg': [256]}, opt=opt)
