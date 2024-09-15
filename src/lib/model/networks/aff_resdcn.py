@@ -336,9 +336,3 @@ class PoseAFFResDCN(BaseModel):
             if isinstance(m, nn.BatchNorm2d):
                 nn.init.constant_(m.weight, 1)
                 nn.init.constant_(m.bias, 0)
-
-from torchinfo import  summary
-
-    # opt = opts().parse()
-    # model = PoseAFFResDCN(50, {'hm': 80, 'wh': 2, 'reg': 2}, {'hm': [256], 'wh': [256], 'reg': [256]}, opt=opt)
-    # summary(model, input_size=(1, 3, 1920, 1080))
