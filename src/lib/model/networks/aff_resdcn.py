@@ -20,7 +20,7 @@ from .aff_net.fusion import AFF, iAFF, DAF
 
 
 try:
-    from .DCNv2.dcn_v2 import DCN
+    from src.lib.model.networks.DCNv2.dcn_v2 import DCN
 except:
     print('Import DCN failed')
     DCN = None
