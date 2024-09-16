@@ -84,13 +84,13 @@ def main(opt):
                 log_dict_val, preds = trainer.val(epoch, val_loader)
                 if opt.eval_val:
                     val_loader.dataset.run_eval(preds, opt.save_dir)
-        for k, v in log_dict_val.items():
-            logger.scalar_summary('val_{}'.format(k), v, epoch)
-            logger.write('{} {:8f} | '.format(k, v))
+            for k, v in log_dict_val.items():
+                logger.scalar_summary('val_{}'.format(k), v, epoch)
+                logger.write('{} {:8f} | '.format(k, v))
         else:
             save_model(os.path.join(opt.save_dir, 'model_last.pth'),
                        epoch, model, optimizer)
-            logger.write('\n')
+        logger.write('\n')
         if epoch in opt.save_point:
             save_model(os.path.join(opt.save_dir, 'model_{}.pth'.format(epoch)),
                        epoch, model, optimizer)

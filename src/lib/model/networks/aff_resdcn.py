@@ -103,7 +103,7 @@ class Bottleneck(nn.Module):
                                bias=False)
         self.bn3 = nn.BatchNorm2d(planes * self.expansion,
                                   momentum=BN_MOMENTUM)
-        self.relu = nn.ReLU()
+        self.relu = nn.ReLU(inplace=True)
         self.downsample = downsample
         self.stride = stride
         if fuse_type == 'AFF':
@@ -183,7 +183,7 @@ class PoseAFFResDCN(BaseModel):
         self.conv1 = nn.Conv2d(3, 64, kernel_size=7, stride=2, padding=3,
                                bias=False)
         self.bn1 = nn.BatchNorm2d(64, momentum=BN_MOMENTUM)
-        self.relu = nn.ReLU(inplace=false)
+        self.relu = nn.ReLU(inplace=True)
         self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
         self.layer1 = self._make_layer(block, 64, layers[0])
         self.layer2 = self._make_layer(block, 128, layers[1], stride=2)
@@ -194,13 +194,13 @@ class PoseAFFResDCN(BaseModel):
                 nn.Conv2d(3, 64, kernel_size=7, stride=2,
                           padding=3, bias=False),
                 nn.BatchNorm2d(64, momentum=BN_MOMENTUM),
-                nn.ReLU())
+                nn.ReLU(inplace=True))
         if opt.pre_hm:
             self.pre_hm_layer = nn.Sequential(
                 nn.Conv2d(1, 64, kernel_size=7, stride=2,
                           padding=3, bias=False),
                 nn.BatchNorm2d(64, momentum=BN_MOMENTUM),
-                nn.ReLU())
+                nn.ReLU(inplace=True))
         # used for deconv layers
         if head_convs['hm'][0] == 64:
             print('Using slimed resnet: 256 128 64 up channels.')
@@ -238,19 +238,20 @@ class PoseAFFResDCN(BaseModel):
         x = self.conv1(x)
         x = self.bn1(x)
         x = self.relu(x)
+        x_clone = x.clone()
         if pre_img is not None:
-            x += self.pre_img_layer(pre_img)
+            x_clone += self.pre_img_layer(pre_img)
         if pre_hm is not None:
-           x += self.pre_hm_layer(pre_hm)
-        x = self.maxpool(x)
+           x_clone += self.pre_hm_layer(pre_hm)
+        x_clone = self.maxpool(x_clone)
 
-        x = self.layer1(x)
-        x = self.layer2(x)
-        x = self.layer3(x)
-        x = self.layer4(x)
+        x_clone = self.layer1(x_clone)
+        x_clone = self.layer2(x_clone)
+        x_clone = self.layer3(x_clone)
+        x_clone = self.layer4(x_clone)
 
-        x = self.deconv_layers(x)
-        return [x]
+        x_clone = self.deconv_layers(x_clone)
+        return [x_clone]
 
     def _make_layer(self, block, planes, blocks, stride=1):
         downsample = None
