@@ -15,6 +15,7 @@ import logging
 
 import torch
 import torch.nn as nn
+from sympy import false
 
 from .aff_net.fusion import AFF, iAFF, DAF
 
@@ -182,7 +183,7 @@ class PoseAFFResDCN(BaseModel):
         self.conv1 = nn.Conv2d(3, 64, kernel_size=7, stride=2, padding=3,
                                bias=False)
         self.bn1 = nn.BatchNorm2d(64, momentum=BN_MOMENTUM)
-        self.relu = nn.ReLU()
+        self.relu = nn.ReLU(inplace=false)
         self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
         self.layer1 = self._make_layer(block, 64, layers[0])
         self.layer2 = self._make_layer(block, 128, layers[1], stride=2)
