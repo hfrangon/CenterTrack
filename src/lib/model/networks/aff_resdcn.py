@@ -25,7 +25,7 @@ except:
     print('Import DCN failed')
     DCN = None
 import torch.utils.model_zoo as model_zoo
-from .base_model import BaseModel
+from src.lib.model.networks.base_model import BaseModel
 
 BN_MOMENTUM = 0.1
 logger = logging.getLogger(__name__)
