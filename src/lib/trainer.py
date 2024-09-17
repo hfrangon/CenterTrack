@@ -6,7 +6,6 @@ import time
 import torch
 import numpy as np
 from progress.bar import Bar
-from tensorboard import summary
 
 from model.data_parallel import DataParallel
 from utils.utils import AverageMeter
