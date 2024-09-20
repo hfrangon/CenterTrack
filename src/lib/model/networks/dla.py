@@ -13,10 +13,11 @@ from torch import nn
 import torch.nn.functional as F
 import torch.utils.model_zoo as model_zoo
 
-from .base_model import BaseModel
+from src.lib.model.networks.aff_net.fusion import AFF, iAFF, DAF
+from src.lib.model.networks.base_model import BaseModel
 
 try:
-    from .DCNv2.dcn_v2 import DCN
+    from src.lib.model.networks.DCNv2.dcn_v2 import DCN
 except:
     print('import DCN failed')
     DCN = None
@@ -309,12 +310,13 @@ class DLA(nn.Module):
     def forward(self, x, pre_img=None, pre_hm=None):
         y = []
         x = self.base_layer(x)
+        #print(f"x shape {x.shape}")
         if pre_img is not None:
             x = x + self.pre_img_layer(pre_img)
-        # 在这里做一个aff的特征融合
-        # 融合完了之后再做transformer再进行下一步的特征提取
+        # 原本直接相加进行特征融合
         if pre_hm is not None:
             x = x + self.pre_hm_layer(pre_hm)
+
         for i in range(6):
             x = getattr(self, 'level{}'.format(i))(x)
             y.append(x)
@@ -524,23 +526,41 @@ class DeformConv(nn.Module):
         return x
 
 class IDAUp(nn.Module):
-    def __init__(self, o, channels, up_f, node_type=(DeformConv, DeformConv)):
+    def __init__(self, o, channels, up_f, node_type=(DeformConv, DeformConv),fuse_type='iAFF'):
         super(IDAUp, self).__init__()
         for i in range(1, len(channels)):
             c = channels[i]
             f = int(up_f[i])  
             proj = node_type[0](c, o)
             node = node_type[1](o, o)
-     
+            if fuse_type == 'AFF':
+                fuse_mode = AFF(o)
+                #print("channels",c)
+                #print("aff channels",o)
+            elif fuse_type == 'iAFF':
+                fuse_mode = iAFF(o)
+            elif fuse_type == 'DAF':
+                fuse_mode = DAF()
+            else:
+                fuse_mode = torch.add
+
             up = nn.ConvTranspose2d(o, o, f * 2, stride=f, 
                                     padding=f // 2, output_padding=0,
                                     groups=o, bias=False)
             fill_up_weights(up)
 
+            if isinstance(fuse_mode, nn.Module):
+                for m in fuse_mode.modules():
+                    if isinstance(m, nn.Conv2d):
+                        nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
+                    elif isinstance(m, (nn.BatchNorm2d, nn.GroupNorm)):
+                        nn.init.constant_(m.weight, 1)
+                        nn.init.constant_(m.bias, 0)
+
             setattr(self, 'proj_' + str(i), proj)
             setattr(self, 'up_' + str(i), up)
             setattr(self, 'node_' + str(i), node)
-                 
+            setattr(self, 'fuse_' + str(i), fuse_mode)
         
     def forward(self, layers, startp, endp):
         for i in range(startp + 1, endp):
@@ -548,7 +568,10 @@ class IDAUp(nn.Module):
             project = getattr(self, 'proj_' + str(i - startp))
             layers[i] = upsample(project(layers[i]))
             node = getattr(self, 'node_' + str(i - startp))
-            layers[i] = node(layers[i] + layers[i - 1])
+            fuse = getattr(self, 'fuse_' + str(i - startp))
+            # todo 是否在这里添加AFF融合
+            #print(f"layers[i] shape: {layers[i].shape} layers[startp] shape: {layers[i-1].shape}")
+            layers[i] = node(fuse(layers[i], layers[i - 1]))
 
 
 
@@ -575,6 +598,7 @@ class DLAUp(nn.Module):
         out = [layers[-1]] # start with 32
         for i in range(len(layers) - self.startp - 1):
             ida = getattr(self, 'ida_{}'.format(i))
+            #print(f"ida_{i} layers: {len(layers) - i - 2} {len(layers)}")
             ida(layers, len(layers) -i - 2, len(layers))
             out.insert(0, layers[-1])
         return out
@@ -609,7 +633,6 @@ class DLASeg(BaseModel):
         self.last_level = 5
         self.base = globals()['dla{}'.format(num_layers)](
             pretrained=(opt.load_model == ''), opt=opt)
-
         channels = self.base.channels
         scales = [2 ** i for i in range(len(channels[self.first_level:]))]
         self.dla_up = DLAUp(

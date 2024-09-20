@@ -112,7 +112,7 @@ class AFF(nn.Module):
         xg = self.global_att(xa)
         xlg = xl + xg
         wei = self.sigmoid(xlg)
-
+        #print(wei,"using aff")
         xo = 2 * x * wei + 2 * residual * (1 - wei)
         return xo
 
