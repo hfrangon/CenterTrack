@@ -101,7 +101,7 @@ class ModleWithLoss(torch.nn.Module):
 
 class Trainer(object):
   def __init__(
-    self, opt, model, optimizer=None):
+    self, opt, model, optimizer=None,scheduler=None):
     self.opt = opt
     self.optimizer = optimizer
     # loss_states: ['tot', 'hm', 'wh', 'reg', 'ltrb', 'hps', 'hm_hp', 'hp_offset', 'dep', 'dim', 'rot', 'amodel_offset', 'ltrb_amodal', 'tracking', 'nuscenes_att', 'velocity']
@@ -109,7 +109,7 @@ class Trainer(object):
     # loss: 具体用的是那种损失函数
     self.loss_stats, self.loss = self._get_losses(opt)
     self.model_with_loss = ModleWithLoss(model, self.loss)
-
+    self.scheduler = scheduler
   def set_device(self, gpus, chunk_sizes, device):
     if len(gpus) > 1:
       self.model_with_loss = DataParallel(
@@ -155,6 +155,8 @@ class Trainer(object):
         self.optimizer.zero_grad()
         loss.backward()
         self.optimizer.step()
+        print(self.scheduler.get_last_lr())
+        self.scheduler.step()
       batch_time.update(time.time() - end)
       end = time.time()
 

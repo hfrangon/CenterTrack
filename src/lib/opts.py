@@ -117,7 +117,7 @@ class opts(object):
         self.parser.add_argument('--optim', default='adam')
         self.parser.add_argument('--lr', type=float, default=1.25e-4,
                                  help='learning rate for batch size 32.')
-        self.parser.add_argument('--lr_step', type=str, default='60',
+        self.parser.add_argument('--lr_step', type=str, default='30,60',
                                  help='drop learning rate by 10.')
         self.parser.add_argument('--save_point', type=str, default='90',
                                  help='when to save the model to disk.')

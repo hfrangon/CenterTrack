@@ -539,23 +539,24 @@ class IDAUp(nn.Module):
                 #print("aff channels",o)
             elif fuse_type == 'iAFF':
                 fuse_mode = iAFF(o)
+                #print("iAFF channels",c)
             elif fuse_type == 'DAF':
                 fuse_mode = DAF()
             else:
                 fuse_mode = torch.add
 
-            up = nn.ConvTranspose2d(o, o, f * 2, stride=f, 
+            up = nn.ConvTranspose2d(o, o, f * 2, stride=f,
                                     padding=f // 2, output_padding=0,
                                     groups=o, bias=False)
             fill_up_weights(up)
 
-            if isinstance(fuse_mode, nn.Module):
-                for m in fuse_mode.modules():
-                    if isinstance(m, nn.Conv2d):
-                        nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
-                    elif isinstance(m, (nn.BatchNorm2d, nn.GroupNorm)):
-                        nn.init.constant_(m.weight, 1)
-                        nn.init.constant_(m.bias, 0)
+            # if isinstance(fuse_mode, nn.Module):
+            #     for m in fuse_mode.modules():
+            #         if isinstance(m, nn.Conv2d):
+            #             nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
+            #         elif isinstance(m, (nn.BatchNorm2d, nn.GroupNorm)):
+            #             nn.init.constant_(m.weight, 1)
+            #             nn.init.constant_(m.bias, 0)
 
             setattr(self, 'proj_' + str(i), proj)
             setattr(self, 'up_' + str(i), up)

@@ -2,6 +2,8 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
+from sched import scheduler
+
 from tensorboard import summary
 
 import _init_paths
@@ -20,7 +22,7 @@ from lib.trainer import Trainer
 
 def get_optimizer(opt, model):
     if opt.optim == 'adam':
-        optimizer = torch.optim.Adam(model.parameters(), opt.lr)
+        optimizer = torch.optim.AdamW(model.parameters(), opt.lr)
     elif opt.optim == 'sgd':
         print('Using SGD')
         optimizer = torch.optim.SGD(
@@ -49,7 +51,8 @@ def main(opt):
         model, optimizer, start_epoch = load_model(
             model, opt.load_model, opt, optimizer)
 
-    trainer = Trainer(opt, model, optimizer)
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=opt.num_epochs, eta_min=1e-9)
+    trainer = Trainer(opt, model, optimizer,scheduler)
     trainer.set_device(opt.gpus, opt.chunk_sizes, opt.device)
 
     if opt.val_intervals < opt.num_epochs or opt.test:
@@ -77,6 +80,7 @@ def main(opt):
         for k, v in log_dict_train.items():
             logger.scalar_summary('train_{}'.format(k), v, epoch)
             logger.write('{} {:8f} | '.format(k, v))
+            logger.write('|lr :{:8f}'.format(scheduler.get_last_lr()))
         if opt.val_intervals > 0 and epoch % opt.val_intervals == 0:
             save_model(os.path.join(opt.save_dir, 'model_{}.pth'.format(mark)),
                        epoch, model, optimizer)
@@ -94,11 +98,11 @@ def main(opt):
         if epoch in opt.save_point:
             save_model(os.path.join(opt.save_dir, 'model_{}.pth'.format(epoch)),
                        epoch, model, optimizer)
-        if epoch in opt.lr_step:
-            lr = opt.lr * (0.1 ** (opt.lr_step.index(epoch) + 1))
-            print('Drop LR to', lr)
-            for param_group in optimizer.param_groups:
-                param_group['lr'] = lr
+        # if epoch in opt.lr_step:
+        #     lr = opt.lr * (0.1 ** (opt.lr_step.index(epoch) + 1))
+        #     print('Drop LR to', lr)
+        #     for param_group in optimizer.param_groups:
+        #         param_group['lr'] = lr
     logger.close()
 
 
