@@ -526,7 +526,7 @@ class DeformConv(nn.Module):
         return x
 
 class IDAUp(nn.Module):
-    def __init__(self, o, channels, up_f, node_type=(DeformConv, DeformConv),fuse_type='iAFF'):
+    def __init__(self, o, channels, up_f, node_type=(DeformConv, DeformConv),fuse_type='DAF'):
         super(IDAUp, self).__init__()
         for i in range(1, len(channels)):
             c = channels[i]
@@ -570,8 +570,7 @@ class IDAUp(nn.Module):
             layers[i] = upsample(project(layers[i]))
             node = getattr(self, 'node_' + str(i - startp))
             fuse = getattr(self, 'fuse_' + str(i - startp))
-            # todo 是否在这里添加AFF融合
-            #print(f"layers[i] shape: {layers[i].shape} layers[startp] shape: {layers[i-1].shape}")
+            #print(f"layers[i] shape: {layers[i].shape} lay  ers[startp] shape: {layers[i-1].shape}")
             layers[i] = node(fuse(layers[i], layers[i - 1]))
 
 
@@ -628,6 +627,15 @@ class DLASeg(BaseModel):
             heads, head_convs, 1, 64 if num_layers == 34 else 128, opt=opt)
         down_ratio=4
         self.opt = opt
+        self.fuse = iAFF(64)
+
+        for module in self.fuse.modules():
+            if isinstance(module, nn.Conv2d):
+                nn.init.kaiming_normal_(module.weight, mode='fan_out', nonlinearity='relu')
+            elif isinstance(module, (nn.BatchNorm2d, nn.GroupNorm)):
+                nn.init.constant_(module.weight, 1)
+                nn.init.constant_(module.bias, 0)
+
         self.node_type = DLA_NODE[opt.dla_node]
         print('Using node type:', self.node_type)
         self.first_level = int(np.log2(down_ratio))
@@ -667,4 +675,5 @@ class DLASeg(BaseModel):
             y.append(x[i].clone())
         self.ida_up(y, 0, len(y))
 
+        self.fuse(y[-1],y[-1])
         return [y[-1]]
