@@ -22,7 +22,7 @@ from lib.trainer import Trainer
 
 def get_optimizer(opt, model):
     if opt.optim == 'adam':
-        optimizer = torch.optim.AdamW(model.parameters(), opt.lr)
+        optimizer = torch.optim.Adam(model.parameters(), opt.lr)
     elif opt.optim == 'sgd':
         print('Using SGD')
         optimizer = torch.optim.SGD(
