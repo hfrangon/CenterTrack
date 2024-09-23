@@ -635,13 +635,13 @@ class DLASeg(BaseModel):
         down_ratio=4
         self.opt = opt
         self.fuse = iAFF(64)
-
-        # for module in self.fuse.modules():
-        #     if isinstance(module, nn.Conv2d):
-        #         nn.init.kaiming_normal_(module.weight, mode='fan_out', nonlinearity='relu')
-        #     elif isinstance(module, (nn.BatchNorm2d, nn.GroupNorm)):
-        #         nn.init.constant_(module.weight, 1)
-        #         nn.init.constant_(module.bias, 0)
+        if opt.init:
+            for model in self.fuse.modules():
+                if isinstance(model, nn.Conv2d):
+                    nn.init.kaiming_normal_(model.weight, mode='fan_out', nonlinearity='relu')
+                elif isinstance(model, (nn.BatchNorm2d, nn.GroupNorm)):
+                    nn.init.constant_(model.weight, 1)
+                    nn.init.constant_(model.bias, 0)
 
         self.node_type = DLA_NODE[opt.dla_node]
         print('Using node type:', self.node_type)
