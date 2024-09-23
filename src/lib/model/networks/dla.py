@@ -322,6 +322,7 @@ class DLA(nn.Module):
         # 原本直接相加进行特征融合
         # if pre_hm is not None:
         #     x = x + self.pre_hm_layer(pre_hm)
+        pre_hm = self.pre_hm_layer(pre_hm)
         x = self.spatial(x, pre_hm)
         for i in range(6):
             x = getattr(self, 'level{}'.format(i))(x)
