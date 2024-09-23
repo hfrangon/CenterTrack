@@ -152,7 +152,25 @@ class MS_CAM(nn.Module):
         wei = self.sigmoid(xlg)
         return x * wei
 
+class SpatialAttention(nn.Module):
+    def __init__(self, kernel_size=7):
+        super(SpatialAttention, self).__init__()
+        assert kernel_size in (3, 7), "kernel size must be 3 or 7"
+        padding = 3 if kernel_size == 7 else 1
 
+        self.conv = nn.Conv2d(2, 1, kernel_size, padding=padding, bias=False)
+        self.sigmoid = nn.Sigmoid()
+
+    def forward(self, x,heatmap):
+        #todo 尝试在这里修改空间注意力 更好的利用heatmap
+        x_clone = x.clone()
+        avg_out = torch.mean(x_clone, dim=1, keepdim=True)
+        max_out, _ = torch.max(x_clone, dim=1, keepdim=True)
+        x_clone = torch.cat([avg_out, max_out], dim=1)
+        x_clone = self.conv(x_clone)
+
+        #heat_map
+        return x * self.sigmoid(x_clone+heatmap)
 
 # if __name__ == '__main__':
 #     import os

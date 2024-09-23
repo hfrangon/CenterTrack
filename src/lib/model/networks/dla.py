@@ -1,4 +1,4 @@
-from __future__ import absolute_import
+﻿from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
@@ -13,7 +13,7 @@ from torch import nn
 import torch.nn.functional as F
 import torch.utils.model_zoo as model_zoo
 
-from src.lib.model.networks.aff_net.fusion import AFF, iAFF, DAF
+from src.lib.model.networks.aff_net.fusion import AFF, iAFF, DAF, SpatialAttention
 from src.lib.model.networks.base_model import BaseModel
 
 try:
@@ -269,6 +269,12 @@ class DLA(nn.Module):
                     padding=3, bias=False),
             nn.BatchNorm2d(channels[0], momentum=BN_MOMENTUM),
             nn.ReLU(inplace=True))
+        self.spatial = SpatialAttention()
+        if opt.init:
+            for model in self.spatial.modules():
+                if isinstance(model, nn.Conv2d):
+                    nn.init.kaiming_normal_(model.weight, mode='fan_out', nonlinearity='relu')
+
         # for m in self.modules():
         #     if isinstance(m, nn.Conv2d):
         #         n = m.kernel_size[0] * m.kernel_size[1] * m.out_channels
@@ -314,9 +320,9 @@ class DLA(nn.Module):
         if pre_img is not None:
             x = x + self.pre_img_layer(pre_img)
         # 原本直接相加进行特征融合
-        if pre_hm is not None:
-            x = x + self.pre_hm_layer(pre_hm)
-
+        # if pre_hm is not None:
+        #     x = x + self.pre_hm_layer(pre_hm)
+        x = self.spatial(x, pre_hm)
         for i in range(6):
             x = getattr(self, 'level{}'.format(i))(x)
             y.append(x)
@@ -629,12 +635,12 @@ class DLASeg(BaseModel):
         self.opt = opt
         self.fuse = iAFF(64)
 
-        for module in self.fuse.modules():
-            if isinstance(module, nn.Conv2d):
-                nn.init.kaiming_normal_(module.weight, mode='fan_out', nonlinearity='relu')
-            elif isinstance(module, (nn.BatchNorm2d, nn.GroupNorm)):
-                nn.init.constant_(module.weight, 1)
-                nn.init.constant_(module.bias, 0)
+        # for module in self.fuse.modules():
+        #     if isinstance(module, nn.Conv2d):
+        #         nn.init.kaiming_normal_(module.weight, mode='fan_out', nonlinearity='relu')
+        #     elif isinstance(module, (nn.BatchNorm2d, nn.GroupNorm)):
+        #         nn.init.constant_(module.weight, 1)
+        #         nn.init.constant_(module.bias, 0)
 
         self.node_type = DLA_NODE[opt.dla_node]
         print('Using node type:', self.node_type)

@@ -79,6 +79,7 @@ def main(opt):
         logger.write('epoch: {} |'.format(epoch))
         for k, v in log_dict_train.items():
             logger.scalar_summary('train_{}'.format(k), v, epoch)
+            logger.scalar_summary('lr', optimizer.param_groups[0]['lr'], epoch)
             logger.write('{} {:8f} | '.format(k, v))
             #logger.write('|lr :{:8f}'.format(scheduler.get_last_lr()))
         if opt.val_intervals > 0 and epoch % opt.val_intervals == 0:
@@ -92,7 +93,10 @@ def main(opt):
                 logger.scalar_summary('val_{}'.format(k), v, epoch)
                 logger.write('{} {:8f} | '.format(k, v))
         else:
-            save_model(os.path.join(opt.save_dir, 'model_last.pth'),
+            if epoch>(opt.num_epochs*5/6):
+                save_model(os.path.join(opt.save_dir, 'model_{}.pth'.format(epoch)),
+                                        epoch,model,optimizer)
+            else: save_model(os.path.join(opt.save_dir, 'model_last.pth'),
                        epoch, model, optimizer)
         logger.write('\n')
         if epoch in opt.save_point:
