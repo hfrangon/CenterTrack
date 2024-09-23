@@ -160,15 +160,14 @@ class SpatialAttention(nn.Module):
 
         self.conv = nn.Conv2d(2, 1, kernel_size, padding=padding, bias=False)
         self.sigmoid = nn.Sigmoid()
-
     def forward(self, x,heatmap):
         #todo 尝试在这里修改空间注意力 更好的利用heatmap
         x_clone = x.clone()
         avg_out = torch.mean(x_clone, dim=1, keepdim=True)
         max_out, _ = torch.max(x_clone, dim=1, keepdim=True)
         x_clone = torch.cat([avg_out, max_out], dim=1)
-        x_clone = self.conv(x_clone)
 
+        x_clone = self.conv(x_clone)
         #heat_map
         return x * self.sigmoid(x_clone+heatmap)
 
@@ -177,10 +176,12 @@ class SpatialAttention(nn.Module):
 #     os.environ['CUDA_VISIBLE_DEVICES'] = "0"
 #     device = torch.device("cuda:0")
 #
-#     x, residual= torch.ones(8,64, 32, 32).to(device),torch.ones(8,64, 32, 32).to(device)
+#     x, residual= torch.randn(8,64, 32, 32).to(device),torch.randn(8,64, 32, 32).to(device)
 #     channels=x.shape[1]
 #
-#     model=AFF(channels=channels)
+#     model=SpatialAttention()
 #     model=model.to(device).train()
+#     print(x)
+#     print(residual)
 #     output = model(x, residual)
-#     print(output.shape)
+#     print(output)

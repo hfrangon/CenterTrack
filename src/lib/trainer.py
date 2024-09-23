@@ -155,7 +155,6 @@ class Trainer(object):
         self.optimizer.zero_grad()
         loss.backward()
         self.optimizer.step()
-        print(self.scheduler.get_last_lr())
         self.scheduler.step()
       batch_time.update(time.time() - end)
       end = time.time()
@@ -171,7 +170,7 @@ class Trainer(object):
         '|Net {bt.avg:.3f}s'.format(dt=data_time, bt=batch_time)
       if opt.print_iter > 0: # If not using progress bar
         if iter_id % opt.print_iter == 0:
-          print('{}/{}| {}'.format(opt.task, opt.exp_id, Bar.suffix)) 
+          print('{}/{}| {}'.format(opt.task, opt.exp_id, Bar.suffix))
       else:
         bar.next()
       
