@@ -91,5 +91,5 @@ class BaseModel(nn.Module):
           z = {}
           for head in self.heads:
               z[head] = self.__getattr__(head)(feats[s])
-          out.append(z)
-      return out
+          out.append(z)# 在为dic 保存了每个head的输出
+      return out# num_stacks个输出 不过为什么要这样呢？ 目前设置的stack都为1

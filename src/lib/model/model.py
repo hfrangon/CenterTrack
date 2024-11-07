@@ -10,7 +10,7 @@ import os
 from src.lib.model.networks.dla import DLASeg
 from src.lib.model.networks.resdcn import PoseResDCN
 from src.lib.model.networks.resnet import PoseResNet
-from src.lib.model.networks.dlav0 import DLASegv0
+from src.lib.model.networks.dlav0 import DLASeg as DLASegv0
 from src.lib.model.networks.generic_network import GenericNetwork
 from src.lib.model.networks.aff_resdcn import PoseAFFResDCN
 _network_factory = {

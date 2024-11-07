@@ -40,16 +40,16 @@ class KalmanFilter(object):
         ndim, dt = 4, 1.
 
         # Create Kalman filter model matrices.
-        self._motion_mat = np.eye(2 * ndim, 2 * ndim)
+        self.A = np.eye(2 * ndim, 2 * ndim)
         for i in range(ndim):
-            self._motion_mat[i, ndim + i] = dt
-        self._update_mat = np.eye(ndim, 2 * ndim)
+            self.A[i, ndim + i] = dt # A矩阵
+        self.H = np.eye(ndim, 2 * ndim)# H矩阵
 
         # Motion and observation uncertainty are chosen relative to the current
         # state estimate. These weights control the amount of uncertainty in
         # the model. This is a bit hacky.
-        self._std_weight_position = 1. / 20
-        self._std_weight_velocity = 1. / 160
+        self._std_weight_position = 1. / 20 # sigmaP（过程噪声的标准差）
+        self._std_weight_velocity = 1. / 160 # sigmaV (观测噪声的标准差)
 
     def initiate(self, measurement):
         """Create track from unassociated measurement.
@@ -63,14 +63,15 @@ class KalmanFilter(object):
         Returns
         -------
         (ndarray, ndarray)
-            Returns the mean vector (8 dimensional) and covariance matrix (8x8
+            Returns the measure vector (8 dimensional) and covariance matrix (8x8
             dimensional) of the new track. Unobserved velocities are initialized
-            to 0 mean.
+            to 0 measure.
 
         """
-        mean_pos = measurement
+        # 初始化有哪些 A H Q R 矩阵 x0 P0
+        mean_pos = measurement # x y a h 观测值(z)
         mean_vel = np.zeros_like(mean_pos)
-        mean = np.r_[mean_pos, mean_vel]
+        measure = np.r_[mean_pos, mean_vel]# 初始变化为0
 
         std = [
             2 * self._std_weight_position * measurement[3],
@@ -82,15 +83,15 @@ class KalmanFilter(object):
             1e-5,
             10 * self._std_weight_velocity * measurement[3]]
         covariance = np.diag(np.square(std))
-        return mean, covariance
+        return measure, covariance
 
-    def predict(self, mean, covariance):
+    def predict(self, measure, covariance):
         """Run Kalman filter prediction step.
 
         Parameters
         ----------
-        mean : ndarray
-            The 8 dimensional mean vector of the object state at the previous
+        measure : ndarray
+            The 8 dimensional measure vector of the object state at the previous
             time step.
         covariance : ndarray
             The 8x8 dimensional covariance matrix of the object state at the
@@ -99,64 +100,72 @@ class KalmanFilter(object):
         Returns
         -------
         (ndarray, ndarray)
-            Returns the mean vector and covariance matrix of the predicted
-            state. Unobserved velocities are initialized to 0 mean.
+            Returns the measure vector and covariance matrix of the predicted
+            state. Unobserved velocities are initialized to 0 measure.
 
         """
         std_pos = [
-            self._std_weight_position * mean[3],
-            self._std_weight_position * mean[3],
+            self._std_weight_position * measure[3],
+            self._std_weight_position * measure[3],
             1e-2,
-            self._std_weight_position * mean[3]]
+            self._std_weight_position * measure[3]]
         std_vel = [
-            self._std_weight_velocity * mean[3],
-            self._std_weight_velocity * mean[3],
+            self._std_weight_velocity * measure[3],
+            self._std_weight_velocity * measure[3],
             1e-5,
-            self._std_weight_velocity * mean[3]]
-        motion_cov = np.diag(np.square(np.r_[std_pos, std_vel]))
+            self._std_weight_velocity * measure[3]]
+        q = np.diag(np.square(np.r_[std_pos, std_vel]))
 
-        #mean = np.dot(self._motion_mat, mean)
-        mean = np.dot(mean, self._motion_mat.T)
-        covariance = np.linalg.multi_dot((
-            self._motion_mat, covariance, self._motion_mat.T)) + motion_cov
+        #measure = np.dot(self.A, measure)
+        X_prior = np.dot(measure, self.A.T)
+        P_prior = np.linalg.multi_dot((
+            self.A, covariance, self.A.T)) + q
 
-        return mean, covariance
+        return X_prior, P_prior
 
-    def project(self, mean, covariance):
+    @staticmethod
+    def mapping(x):
+        # 1-(-(x-0.4)*(x-1)+1)*x
+        # 1 - 0.5 * (1 + np.sin(np.pi * (x - 0.5)))
+        return 1-(-(x-0.6)*(x-1)+1)*x
+
+    def project(self, measure, covariance,confidence=.0):
         """Project state distribution to measurement space.
-
+            Z = H*X + v
         Parameters
         ----------
-        mean : ndarray
-            The state's mean vector (8 dimensional array).
+        measure : ndarray
+            The state's measure vector (8 dimensional array).(x y a h vx vy va vh)
         covariance : ndarray
             The state's covariance matrix (8x8 dimensional).
-
+        confidence: 检测置信度
         Returns
         -------
         (ndarray, ndarray)
-            Returns the projected mean and covariance matrix of the given state
+            Returns the projected measure and covariance matrix of the given state
             estimate.
 
         """
         std = [
-            self._std_weight_position * mean[3],
-            self._std_weight_position * mean[3],
+            self._std_weight_position * measure[3],
+            self._std_weight_position * measure[3],
             1e-1,
-            self._std_weight_position * mean[3]]
-        innovation_cov = np.diag(np.square(std))
+            self._std_weight_position * measure[3]]
+        std = [KalmanFilter.mapping(confidence)*x for x in std]
+        #std =[(1-confidence)*x for x in std]
+        R = np.diag(np.square(std))
 
-        mean = np.dot(self._update_mat, mean)
-        covariance = np.linalg.multi_dot((
-            self._update_mat, covariance, self._update_mat.T))
-        return mean, covariance + innovation_cov
+        Z = np.dot(self.H, measure)
+        projected_cov =np.linalg.multi_dot((
+            self.H, covariance, self.H.T)) + R
+        return Z, projected_cov
 
-    def multi_predict(self, mean, covariance):
+    def multi_predict(self, measure, covariance):
         """Run Kalman filter prediction step (Vectorized version).
         Parameters
         ----------
-        mean : ndarray
-            The Nx8 dimensional mean matrix of the object states at the previous
+        measure : ndarray
+            The Nx8 dimensional measure matrix of the object states at the previous
             time step.
         covariance : ndarray
             The Nx8x8 dimensional covariance matrics of the object states at the
@@ -164,42 +173,42 @@ class KalmanFilter(object):
         Returns
         -------
         (ndarray, ndarray)
-            Returns the mean vector and covariance matrix of the predicted
-            state. Unobserved velocities are initialized to 0 mean.
+            Returns the measure vector and covariance matrix of the predicted
+            state. Unobserved velocities are initialized to 0 measure.
         """
         std_pos = [
-            self._std_weight_position * mean[:, 3],
-            self._std_weight_position * mean[:, 3],
-            1e-2 * np.ones_like(mean[:, 3]),
-            self._std_weight_position * mean[:, 3]]
+            self._std_weight_position * measure[:, 3],
+            self._std_weight_position * measure[:, 3],
+            1e-2 * np.ones_like(measure[:, 3]),
+            self._std_weight_position * measure[:, 3]]
         std_vel = [
-            self._std_weight_velocity * mean[:, 3],
-            self._std_weight_velocity * mean[:, 3],
-            1e-5 * np.ones_like(mean[:, 3]),
-            self._std_weight_velocity * mean[:, 3]]
+            self._std_weight_velocity * measure[:, 3],
+            self._std_weight_velocity * measure[:, 3],
+            1e-5 * np.ones_like(measure[:, 3]),
+            self._std_weight_velocity * measure[:, 3]]
         sqr = np.square(np.r_[std_pos, std_vel]).T
 
-        motion_cov = []
-        for i in range(len(mean)):
-            motion_cov.append(np.diag(sqr[i]))
-        motion_cov = np.asarray(motion_cov)
+        Q = []
+        for i in range(len(measure)):
+            Q.append(np.diag(sqr[i]))
+        Q = np.asarray(Q)
 
-        mean = np.dot(mean, self._motion_mat.T)
-        left = np.dot(self._motion_mat, covariance).transpose((1, 0, 2))
-        covariance = np.dot(left, self._motion_mat.T) + motion_cov
+        X_prior = np.dot(measure, self.A.T)
+        left = np.dot(self.A, covariance).transpose((1, 0, 2))
+        covariance = np.dot(left, self.A.T) + Q
 
-        return mean, covariance
+        return X_prior, covariance
 
-    def update(self, mean, covariance, measurement):
+    def update(self, measure, covariance, measurement,confidence=.0):
         """Run Kalman filter correction step.
 
         Parameters
         ----------
-        mean : ndarray
-            The predicted state's mean vector (8 dimensional).
+        measure : ndarray 先验值
+            The predicted state's measure vector (8 dimensional).
         covariance : ndarray
             The state's covariance matrix (8x8 dimensional).
-        measurement : ndarray
+        measurement : ndarray 观测值
             The 4 dimensional measurement vector (x, y, a, h), where (x, y)
             is the center position, a the aspect ratio, and h the height of the
             bounding box.
@@ -210,21 +219,23 @@ class KalmanFilter(object):
             Returns the measurement-corrected state distribution.
 
         """
-        projected_mean, projected_cov = self.project(mean, covariance)
+        # measure
+        #
+        projected_mean, projected_cov = self.project(measure, covariance,confidence)
 
         chol_factor, lower = scipy.linalg.cho_factor(
             projected_cov, lower=True, check_finite=False)
         kalman_gain = scipy.linalg.cho_solve(
-            (chol_factor, lower), np.dot(covariance, self._update_mat.T).T,
+            (chol_factor, lower), np.dot(covariance, self.H.T).T,
             check_finite=False).T
         innovation = measurement - projected_mean
 
-        new_mean = mean + np.dot(innovation, kalman_gain.T)
-        new_covariance = covariance - np.linalg.multi_dot((
+        X_post = measure + np.dot(innovation, kalman_gain.T)
+        P_post = covariance - np.linalg.multi_dot((
             kalman_gain, projected_cov, kalman_gain.T))
-        return new_mean, new_covariance
+        return X_post, P_post
 
-    def gating_distance(self, mean, covariance, measurements,
+    def gating_distance(self, measure, covariance, measurements,
                         only_position=False, metric='maha'):
         """Compute gating distance between state distribution and measurements.
         A suitable distance threshold can be obtained from `chi2inv95`. If
@@ -232,7 +243,7 @@ class KalmanFilter(object):
         freedom, otherwise 2.
         Parameters
         ----------
-        mean : ndarray
+        measure : ndarray
             Mean vector over the state distribution (8 dimensional).
         covariance : ndarray
             Covariance of the state distribution (8x8 dimensional).
@@ -247,15 +258,15 @@ class KalmanFilter(object):
         -------
         ndarray
             Returns an array of length N, where the i-th element contains the
-            squared Mahalanobis distance between (mean, covariance) and
+            squared Mahalanobis distance between (measure, covariance) and
             `measurements[i]`.
         """
-        mean, covariance = self.project(mean, covariance)
+        measure, covariance = self.project(measure, covariance)
         if only_position:
-            mean, covariance = mean[:2], covariance[:2, :2]
+            measure, covariance = measure[:2], covariance[:2, :2]
             measurements = measurements[:, :2]
 
-        d = measurements - mean
+        d = measurements - measure
         if metric == 'gaussian':
             return np.sum(d * d, axis=1)
         elif metric == 'maha':
@@ -267,3 +278,4 @@ class KalmanFilter(object):
             return squared_maha
         else:
             raise ValueError('invalid distance metric')
+

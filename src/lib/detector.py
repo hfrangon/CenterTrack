@@ -22,6 +22,10 @@ from dataset.dataset_factory import get_dataset
 
 
 class Detector(object):
+  """
+    用于测试时区分 检测和追踪
+    在训练时使用相同的detector 但是不会使用到追踪部分
+  """
   def __init__(self, opt):
     if opt.gpus[0] >= 0:
       opt.device = torch.device('cuda')
@@ -369,6 +373,14 @@ class Detector(object):
     return dets[0]
 
   def merge_outputs(self, detections):
+    """
+    在此处判断置信度是否大于阈值 再进入后序匹配环节
+    Args:
+      detections:
+
+    Returns:
+
+    """
     assert len(self.opt.test_scales) == 1, 'multi_scale not supported!'
     results = []
     for i in range(len(detections[0])):

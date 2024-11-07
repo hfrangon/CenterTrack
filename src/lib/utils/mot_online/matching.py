@@ -54,7 +54,7 @@ def linear_assignment(cost_matrix, thresh):
     cost, x, y = lap.lapjv(cost_matrix, extend_cost=True, cost_limit=thresh)
     for ix, mx in enumerate(x):
         if mx >= 0:
-            matches.append([ix, mx])
+            matches.append([ix, mx])# 返回的是匹配的索引 ix代表行，mx代表列 表示第ix行和第mx列匹配
     unmatched_a = np.where(x < 0)[0]
     unmatched_b = np.where(y < 0)[0]
     matches = np.asarray(matches)

@@ -38,6 +38,16 @@ class GenericLoss(torch.nn.Module):
     return output
 
   def forward(self, outputs, batch):
+    """
+
+    Args:
+      outputs: 网络的输出
+      batch:ground truth
+
+    Returns:
+      loss:总的加权损失
+      losses:各个部分的损失
+    """
     opt = self.opt
     losses = {head: 0 for head in opt.heads}
 
@@ -95,13 +105,12 @@ class ModleWithLoss(torch.nn.Module):
   def forward(self, batch):
     pre_img = batch['pre_img'] if 'pre_img' in batch else None
     pre_hm = batch['pre_hm'] if 'pre_hm' in batch else None
-    outputs = self.model(batch['image'], pre_img, pre_hm)
+    outputs = self.model(batch['image'], pre_img, pre_hm)# outputs为一个list 每个元素为dic 保存了每个head的输出
     loss, loss_stats = self.loss(outputs, batch)
     return outputs[-1], loss, loss_stats
 
 class Trainer(object):
-  def __init__(
-    self, opt, model, optimizer=None,scheduler=None):
+  def __init__(self, opt, model, optimizer=None,scheduler=None):
     self.opt = opt
     self.optimizer = optimizer
     # loss_states: ['tot', 'hm', 'wh', 'reg', 'ltrb', 'hps', 'hm_hp', 'hp_offset', 'dep', 'dim', 'rot', 'amodel_offset', 'ltrb_amodal', 'tracking', 'nuscenes_att', 'velocity']
@@ -148,7 +157,8 @@ class Trainer(object):
 
       for k in batch:
         if k != 'meta':
-          batch[k] = batch[k].to(device=opt.device, non_blocking=True)   
+          batch[k] = batch[k].to(device=opt.device, non_blocking=True)
+      # 在这里进行前向传播
       output, loss, loss_stats = model_with_loss(batch)
       loss = loss.mean()
       if phase == 'train':

@@ -33,7 +33,7 @@ def get_optimizer(opt, model):
 
 
 def main(opt):
-    torch.manual_seed(opt.seed)
+    torch.manual_seed(opt.seed)#todo Torch.manual_seed(3407) is all you need
     torch.backends.cudnn.benchmark = not opt.not_cuda_benchmark and not opt.test
     Dataset = get_dataset(opt.dataset)
     opt = opts().update_dataset_info_and_set_heads(opt, Dataset)
@@ -51,8 +51,8 @@ def main(opt):
         model, optimizer, start_epoch = load_model(
             model, opt.load_model, opt, optimizer)
 
-    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=opt.num_epochs, eta_min=1e-9)
-    trainer = Trainer(opt, model, optimizer,scheduler)
+    schedule = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=opt.num_epochs, eta_min=1e-9)
+    trainer = Trainer(opt, model, optimizer, schedule)
     trainer.set_device(opt.gpus, opt.chunk_sizes, opt.device)
 
     if opt.val_intervals < opt.num_epochs or opt.test:
