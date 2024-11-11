@@ -199,7 +199,7 @@ class KalmanFilter(object):
 
         return X_prior, covariance
 
-    def update(self, measure, covariance, measurement,confidence=.0):
+    def update(self, measure, covariance, measurement, confidence =.0):
         """Run Kalman filter correction step.
 
         Parameters
@@ -217,6 +217,10 @@ class KalmanFilter(object):
         -------
         (ndarray, ndarray)
             Returns the measurement-corrected state distribution.
+
+        Args:
+            confidence:
+            confidence:
 
         """
         # measure
