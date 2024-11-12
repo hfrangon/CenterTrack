@@ -5,8 +5,13 @@ from __future__ import print_function
 import lap
 import numpy as np
 import scipy
+import torch
 from cython_bbox import bbox_overlaps as bbox_ious
 from scipy.spatial.distance import cdist
+from sympy import false
+from torch import nn
+
+from src.lib.utils.mot_online.kalman_filter import KalmanFilter
 
 chi2inv95 = {
     1: 3.8415,
@@ -86,7 +91,6 @@ def iou_distance(atracks, btracks):
     Compute cost based on IoU
     :type atracks: list[STrack]
     :type btracks: list[STrack]
-    越小越好
     :rtype cost_matrix np.ndarray
     """
 
@@ -98,7 +102,6 @@ def iou_distance(atracks, btracks):
         btlbrs = [track.tlbr for track in btracks]
     _ious = ious(atlbrs, btlbrs)
     cost_matrix = 1 - _ious
-
     return cost_matrix
 
 def embedding_distance(tracks, detections, metric='cosine'):
@@ -171,7 +174,7 @@ def vis_id_feature_A_distance(tracks, detections, metric='cosine'):
     track_features = np.asarray([track.smooth_feat for track in tracks], dtype=np.float64)
     return track_features, det_features, cost_matrix, cost_matrix_det, cost_matrix_track
 
-def gate_cost_matrix(kf, cost_matrix, tracks, detections, only_position=False):
+def gate_cost_matrix(kf,cost_matrix, tracks, detections, only_position=False):
     if cost_matrix.size == 0:
         return cost_matrix
     gating_dim = 2 if only_position else 4
@@ -183,6 +186,28 @@ def gate_cost_matrix(kf, cost_matrix, tracks, detections, only_position=False):
         cost_matrix[row, gating_distance > gating_threshold] = np.inf
     return cost_matrix
 
+def iou_distance_with_mds(tracks, detections):
+    cost_matrix = iou_distance(tracks, detections)
+    if cost_matrix.size == 0:
+        return cost_matrix
+    maha_cost_matrix = np.zeros_like(cost_matrix)
+    mask =  np.zeros_like(cost_matrix)
+    gating_threshold = chi2inv95[4]
+    measurements = np.asarray([det.to_xyah() for det in detections])
+    for row, track in enumerate(tracks):
+        gating_distance = track.kalman_filter.gating_distance(
+            track.mean, track.covariance, measurements,only_position=False)
+        maha_cost_matrix[row,:] = gating_distance
+        mask[row,gating_distance > gating_threshold] = 1
+        maha_cost_matrix[row,gating_distance > gating_threshold] = gating_threshold
+    maha_cost_matrix = gating_threshold - maha_cost_matrix
+    for row, track in enumerate(tracks):
+        maha_cost_matrix[row,:] = nn.functional.softmax(torch.tensor(maha_cost_matrix[row,:]),dim=0).numpy()
+    maha_cost_matrix[mask==1] = 0
+    cost_matrix = np.maximum(cost_matrix - 0.02 * maha_cost_matrix, 0)
+    #cost_matrix[mask==1] = np.inf
+    # assert  (cost_matrix>=0).all()
+    return cost_matrix
 
 def fuse_motion(kf, cost_matrix, tracks, detections, only_position=False, lambda_=0.98):
     if cost_matrix.size == 0:

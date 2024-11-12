@@ -39,6 +39,8 @@ class opts(object):
                                       'set load_model to model_last.pth '
                                       'in the exp dir if load_model is empty.')
         self.parser.add_argument('--init', action='store_true',)
+        self.parser.add_argument('--use_MDS', action='store_true')
+
         # system
         self.parser.add_argument('--gpus', default='0',
                                  help='-1 for CPU, use comma for multiple gpus')

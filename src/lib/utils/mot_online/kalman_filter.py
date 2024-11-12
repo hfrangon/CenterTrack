@@ -239,7 +239,8 @@ class KalmanFilter(object):
             kalman_gain, projected_cov, kalman_gain.T))
         return X_post, P_post
 
-    def gating_distance(self, measure, covariance, measurements,
+
+    def gating_distance(self,measure, covariance, measurements,
                         only_position=False, metric='maha'):
         """Compute gating distance between state distribution and measurements.
         A suitable distance threshold can be obtained from `chi2inv95`. If
