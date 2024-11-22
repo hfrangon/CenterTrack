@@ -3,11 +3,12 @@ from __future__ import division
 from __future__ import print_function
 
 import math
-from datetime import datetime
 
 import numpy as np
 from scipy.optimize import linear_sum_assignment as linear_assignment
 import copy
+
+from .cmc.file import GmcFile
 from .mot_online.kalman_filter import KalmanFilter
 from .mot_online.basetrack import BaseTrack, TrackState
 from .mot_online import matching
@@ -19,6 +20,7 @@ class STrack(BaseTrack):
     def __init__(self, tlwh, score):
 
         # wait activate
+        self.attr_saved = None
         self._tlwh = np.asarray(tlwh, dtype=np.float64)
         self.kalman_filter = None
         self.mean, self.covariance = None, None
@@ -26,6 +28,7 @@ class STrack(BaseTrack):
         self.time_since_update=0
         self.score = score
         self.tracklet_len = 0
+        self.last_observation = None # list of [x1, y1, w, h, frame_id]
 
     def predict(self):
         mean_state = self.mean.copy()
@@ -53,7 +56,7 @@ class STrack(BaseTrack):
         self.kalman_filter = kalman_filter
         self.track_id = self.next_id()
         self.mean, self.covariance = self.kalman_filter.initiate(self.tlwh_to_xyah(self._tlwh))
-
+        self.last_observation = list(self.tlwh_to_xywh(self._tlwh))+[frame_id]
         self.tracklet_len = 0
         self.state = TrackState.Tracked
         if frame_id == 1:
@@ -62,10 +65,30 @@ class STrack(BaseTrack):
         self.frame_id = frame_id
         self.start_frame = frame_id
 
-    def re_activate(self, new_track, frame_id, new_id=False,cost =1.0):
-        self.mean, self.covariance = self.kalman_filter.update(
-            self.mean, self.covariance, self.tlwh_to_xyah(new_track.tlwh)
-        )
+    def re_activate(self, new_track, frame_id, new_id=False):
+        # todo 在这里做oru
+
+        index2 = frame_id
+        x2, y2, w2, h2 = STrack.tlwh_to_xywh(new_track.tlwh)
+        self.__dict__ = self.attr_saved
+        index1 = self.last_observation[4]
+        x1, y1, w1, h1 = self.last_observation[:4]
+        time_gap = index2 - index1
+        dx = (x2 - x1) / time_gap
+        dy = (y2 - y1) / time_gap
+        dw = (w2 - w1) / time_gap
+        dh = (h2 - h1) / time_gap
+        for i in range(time_gap):
+            x = x1 + (i + 1) * dx
+            y = y1 + (i + 1) * dy
+            w = w1 + (i + 1) * dw
+            h = h1 + (i + 1) * dh
+            self.mean, self.covariance = self.kalman_filter.update(
+                self.mean, self.covariance, np.array([x, y, w / float(h), h])
+            )
+            if not i == (time_gap - 1):
+                self.predict()
+
         self.tracklet_len = 0
         self.state = TrackState.Tracked
         self.is_activated = True
@@ -90,14 +113,47 @@ class STrack(BaseTrack):
         """
         self.frame_id = frame_id
         self.tracklet_len += 1
-
         new_tlwh = new_track.tlwh
+        self.last_observation = list(self.tlwh_to_xywh(self._tlwh))+[frame_id]
         self.mean, self.covariance = self.kalman_filter.update(
             self.mean, self.covariance, self.tlwh_to_xyah(new_tlwh))
         self.state = TrackState.Tracked
         self.is_activated = True
         self.time_since_update = 0
         self.score = new_track.score
+
+    @staticmethod
+    def multi_gmc(stracks, H=np.eye(2, 3)):
+        if len(stracks) > 0:
+            multi_mean = np.asarray([st.mean.copy() for st in stracks])
+            multi_covariance = np.asarray([st.covariance for st in stracks])
+
+            R = H[:2, :2]
+            R8x8 = np.kron(np.eye(4, dtype=float), R)
+            t = H[:2, 2]
+
+            for i, (mean, cov) in enumerate(zip(multi_mean, multi_covariance)):
+                mean = R8x8.dot(mean)#改变了mean中所有状态
+                mean[:2] += t
+                cov = R8x8.dot(cov).dot(R8x8.transpose())
+
+                stracks[i].mean = mean
+                stracks[i].covariance = cov
+
+    def camera_update(self, matrix):
+        x1, y1, x2, y2 = self.tlbr
+        x1_, y1_, _ = matrix @ np.array([x1, y1, 1]).T
+        x2_, y2_, _ = matrix @ np.array([x2, y2, 1]).T
+        w, h = x2_ - x1_, y2_ - y1_
+        cx, cy = x1_ + w / 2, y1_ + h / 2
+        self.mean[:4] = [cx, cy, w / h, h]#只改变了mean的前四个值
+
+    def mark_lost(self):
+        """
+            Save the parameters before non-observation forward
+        """
+        self.state = TrackState.Lost
+        self.attr_saved = copy.deepcopy(self.__dict__)
 
     @property
     # @jit(nopython=True)
@@ -121,6 +177,11 @@ class STrack(BaseTrack):
         ret = self.tlwh.copy()
         ret[2:] += ret[:2]
         return ret
+    @property
+    def to_xywh(self):
+        ret = self.mean
+        ret[2] *= ret[3]
+        return ret
 
     @staticmethod
     # @jit(nopython=True)
@@ -133,8 +194,11 @@ class STrack(BaseTrack):
         ret[2] /= ret[3]
         return ret
 
-    def to_xyah(self):
-        return self.tlwh_to_xyah(self.tlwh)
+    @staticmethod
+    def tlwh_to_xywh(tlwh):
+        ret = np.asarray(tlwh).copy()
+        ret[:2] += ret[2:] / 2
+        return ret
 
     @staticmethod
     # @jit(nopython=True)
@@ -162,6 +226,7 @@ class BYTETracker(object):
         self.max_time_lost = self.buffer_size
         self.reset()
 
+
     # below has no effect to final output, just to be compatible to codebase
     def init_track(self, results):
         for item in results:
@@ -186,7 +251,7 @@ class BYTETracker(object):
         # below has no effect to final output, just to be compatible to codebase
         self.id_count = 0
 
-    def step(self, results, public_det=None):
+    def step(self, results, public_det=None,img_info=None):
         self.frame_id += 1
         activated_starcks = []
         refind_stracks = []
@@ -227,6 +292,16 @@ class BYTETracker(object):
         strack_pool = joint_stracks(tracked_stracks, self.lost_stracks)
         # Predict the current location with KF
         STrack.multi_predict(strack_pool)
+
+        # cmc
+        # Fix camera motion
+        matrix = GmcFile.apply(img_info, self.args.trainval)
+        for track in strack_pool:
+            track.camera_update(matrix)
+        for track in unconfirmed:
+            track.camera_update(matrix)
+
+
         tracks = [track for track in strack_pool if track.score>= self.args.track_thresh]
         tracks_second =[track for track in strack_pool if track.score < self.args.track_thresh]
         if self.args.use_MDS:
@@ -272,7 +347,7 @@ class BYTETracker(object):
                                  (tlbr, s) in zip(dets_second, scores_second)]
         else:
             detections_second = []
-
+        # todo 使用上一次的检测值做匹配
         r_tracked_stracks = [tracks_second[i] for i in u_track if tracks_second[i].state == TrackState.Tracked]
         if self.args.use_MDS:
             dists = matching.iou_distance_with_mds(r_tracked_stracks, detections_second)
@@ -297,7 +372,6 @@ class BYTETracker(object):
 
         '''Deal with unconfirmed tracks, usually tracks with only one beginning frame'''
         detections = [u_detection[i] for i in u_detection_s]
-        STrack.multi_predict(unconfirmed)
 
         if self.args.use_MDS:
             dists = matching.iou_distance_with_mds(unconfirmed, detections)

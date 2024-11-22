@@ -148,7 +148,7 @@ class Detector(object):
       # public detection mode in MOT challenge
       public_det = meta['cur_dets'] if self.opt.public_det else None
       # add tracking id to results
-      results = self.tracker.step(results, public_det)
+      results = self.tracker.step(results, public_det,img_info=pre_processed_images['file_name'][0])
       self.pre_images = images
 
     tracking_time = time.time()

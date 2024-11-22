@@ -14,7 +14,10 @@ CREATE_SPLITTED_DET = True
 
 if __name__ == '__main__':
   for split in SPLITS:
-    data_path = DATA_PATH + (split if not HALF_VIDEO else 'train')
+    if split == "test":
+        data_path = os.path.join(DATA_PATH, 'test')
+    else:
+        data_path = os.path.join(DATA_PATH, 'train')
     out_path = OUT_PATH + '{}.json'.format(split)
     out = {'images': [], 'annotations': [], 
            'categories': [{'id': 1, 'name': 'pedestrain'}],
