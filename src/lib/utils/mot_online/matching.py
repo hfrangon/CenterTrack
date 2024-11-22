@@ -6,13 +6,12 @@ import lap
 import numpy as np
 import scipy
 import torch
-from Cython import array
 from cython_bbox import bbox_overlaps as bbox_ious
 from scipy.spatial.distance import cdist
-from sympy import false
 from torch import nn
 
-from src.lib.utils.mot_online.kalman_filter import KalmanFilter
+
+
 
 chi2inv95 = {
     1: 3.8415,
@@ -159,7 +158,7 @@ def embedding_distance2(tracks, detections, metric='cosine'):
     cost_matrix = np.maximum(0.0, cdist(track_features, det_features, metric))  # Nomalized features
     track_features = np.asarray([track.features[0] for track in tracks], dtype=np.float64)
     cost_matrix2 = np.maximum(0.0, cdist(track_features, det_features, metric))  # Nomalized features
-    track_features = np.asarray([track.features[len(track.features)-1] for track in tracks], dtype=np.float)
+    track_features = np.asarray([track.features[len(track.features)-1] for track in tracks], dtype=float)
     cost_matrix3 = np.maximum(0.0, cdist(track_features, det_features, metric))  # Nomalized features
     for row in range(len(cost_matrix)):
         cost_matrix[row] = (cost_matrix[row]+cost_matrix2[row]+cost_matrix3[row])/3
@@ -276,56 +275,96 @@ def association(tracks, detections, iou_thresh,is_low=False):
     iou_thresh=1-iou_thresh
     if iou_cost_matrix.size == 0:
         return np.empty((0, 2), dtype=int), tuple(range(iou_cost_matrix.shape[0])), tuple(range(iou_cost_matrix.shape[1]))
-    # maha_cost_matrix = mds_distance(tracks, detections)
-    # cost_matrix = iou_cost_matrix + 0.02 * maha_cost_matrix
-    # if not is_low:
-    #     direction_cost_matrix = offset_distance(tracks, detections)
-    #     cost_matrix[direction_cost_matrix < 0] = -np.inf
-    # # score = np.array([detection.score for detection in detections]).reshape(1, -1)
-    # # direction_cost_matrix *= score
-    #
-    # cost_matrix[iou_cost_matrix<(1-iou_thresh)] = -np.inf
-    # #cost_matrix[maha_cost_matrix==0] = -np.inf
-    # cost,x,y=lap.lapjv(-cost_matrix, extend_cost=True, cost_limit=1e5)
-    # matches = []
-    # for ix, mx in enumerate(x):
-    #     if mx >= 0:
-    #         matches.append([ix, mx])
-    # matches = np.asarray(matches)
-    # unmatched_track = np.where(x < 0)[0]
-    # unmatched_detection = np.where(y < 0)[0]
+    maha_cost_matrix = mds_distance(tracks, detections)
 
     if min(iou_cost_matrix.shape) > 0:
         a = (iou_cost_matrix > iou_thresh).astype(np.int32)
         if a.sum(1).max() == 1 and a.sum(0).max() == 1:
             matched_indices = np.stack(np.where(a), axis=1)
         else:
-            matched_indices =assignment(-(iou_cost_matrix))
+            cost_matrix = iou_cost_matrix + 0.02 * maha_cost_matrix
+            matched_indices =assignment(-cost_matrix)
     else:
         matched_indices = np.empty(shape=(0,2))
 
 
     unmatched_trackers = []
     for t, trk in enumerate(tracks):
-        if (t not in matched_indices[:, 0]):
+        if t not in matched_indices[:, 0]:
             unmatched_trackers.append(t)
 
     unmatched_detections = []
     for d, det in enumerate(detections):
-        if (d not in matched_indices[:, 1]):
+        if d not in matched_indices[:, 1]:
             unmatched_detections.append(d)
 
-    # filter out matched with low IOU
+    direction_cost_matrix = np.zeros((len(tracks), len(detections)), dtype=np.float64)
+    if not is_low:
+        direction_cost_matrix = offset_distance(tracks, detections)
+    #direction_cost_matrix = offset_distance(tracks, detections)
+
+    # filter out matched
     matches = []
     for m in matched_indices:
-        if(iou_cost_matrix[m[0], m[1]]<iou_thresh):
+        if iou_cost_matrix[m[0], m[1]]<iou_thresh or maha_cost_matrix[m[0], m[1]]==0 or direction_cost_matrix[m[0], m[1]]<0:
             unmatched_trackers.append(m[0])
             unmatched_detections.append(m[1])
         else:
             matches.append(m.reshape(1,2))
-    if(len(matches)==0):
+    if len(matches)==0:
         matches = np.empty((0,2),dtype=int)
     else:
         matches = np.concatenate(matches,axis=0)
 
     return matches, np.array(unmatched_trackers),np.array(unmatched_detections)
+
+
+def first_association(tracks, detections, iou_thresh):
+    score_matrix = np.asarray([track.score for track in tracks], dtype=np.float32).reshape(-1,1)
+    iou_cost_matrix = hm_iou_distance(tracks, detections)
+    iou_cost_matrix= iou_cost_matrix*score_matrix
+    iou_matrix = iou_distance(tracks, detections)
+    iou_thresh = 1 - iou_thresh
+    if iou_cost_matrix.size == 0:
+        return np.empty((0, 2), dtype=int), tuple(range(iou_cost_matrix.shape[0])), tuple(
+            range(iou_cost_matrix.shape[1]))
+    maha_cost_matrix = mds_distance(tracks, detections)*score_matrix
+
+    if min(iou_cost_matrix.shape) > 0:
+        a = (iou_matrix > iou_thresh).astype(np.int32)
+        if a.sum(1).max() == 1 and a.sum(0).max() == 1:
+            matched_indices = np.stack(np.where(a), axis=1)
+        else:
+            cost_matrix = iou_cost_matrix + 0.2 * maha_cost_matrix
+            matched_indices = assignment(-cost_matrix)
+    else:
+        matched_indices = np.empty(shape=(0, 2))
+
+    unmatched_trackers = []
+    for t, trk in enumerate(tracks):
+        if t not in matched_indices[:, 0]:
+            unmatched_trackers.append(t)
+
+    unmatched_detections = []
+    for d, det in enumerate(detections):
+        if d not in matched_indices[:, 1]:
+            unmatched_detections.append(d)
+
+    direction_cost_matrix = offset_distance(tracks, detections)
+    # direction_cost_matrix = offset_distance(tracks, detections)
+
+    # filter out matched
+    matches = []
+    for m in matched_indices:
+        if iou_cost_matrix[m[0], m[1]] < iou_thresh or maha_cost_matrix[m[0], m[1]] == 0 or direction_cost_matrix[
+            m[0], m[1]] < 0:
+            unmatched_trackers.append(m[0])
+            unmatched_detections.append(m[1])
+        else:
+            matches.append(m.reshape(1, 2))
+    if len(matches) == 0:
+        matches = np.empty((0, 2), dtype=int)
+    else:
+        matches = np.concatenate(matches, axis=0)
+
+    return matches, np.array(unmatched_trackers), np.array(unmatched_detections)

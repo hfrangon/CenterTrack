@@ -323,7 +323,12 @@ class opts(object):
         opt.root_dir = os.path.join(os.path.dirname(__file__), '', '..', '', '..')
         opt.data_dir = os.path.join(opt.root_dir, 'data')
         opt.exp_dir = os.path.join(opt.root_dir, 'exp', opt.task)
-        opt.save_dir = os.path.join(opt.exp_dir, opt.exp_id)
+        if opt.trainval:
+            opt.save_dir = os.path.join(opt.root_dir, 'src', 'tools', 'TrackEval', 'data', 'trackers', 'mot_challenge',
+                                        'MOT17-train', 'CenterTrack', 'data')
+        else:
+            opt.save_dir = os.path.join(opt.root_dir,'exp','results')
+
         opt.debug_dir = os.path.join(opt.save_dir, 'debug')
 
         if opt.resume and opt.load_model == '':

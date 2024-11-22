@@ -15,10 +15,9 @@ class GmcFile:
         eye = np.eye(3)
         with open(filePath, 'r') as file:
             gmcFile = json.load(file)
-        if imgId in gmcFile[seqName]:
+        if seqName in gmcFile and imgId in gmcFile[seqName]:
             matrix = np.array(gmcFile[seqName][imgId])
             dist = np.linalg.norm(eye - matrix)
             if dist < 100:
                 return matrix
-            else:
-                return eye
+        return eye
