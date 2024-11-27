@@ -6,6 +6,7 @@ import lap
 import numpy as np
 import scipy
 import torch
+from Cython import array
 from cython_bbox import bbox_overlaps as bbox_ious
 from scipy.spatial.distance import cdist
 from sympy import false
@@ -52,11 +53,13 @@ def _indices_to_matches(cost_matrix, indices, thresh):
     return matches, unmatched_a, unmatched_b
 
 
-def linear_assignment(cost_matrix, thresh):
+def linear_assignment(tracks, detections, iou_thresh,is_low=False):
+    cost_matrix = iou_distance(tracks, detections)
     if cost_matrix.size == 0:
         return np.empty((0, 2), dtype=int), tuple(range(cost_matrix.shape[0])), tuple(range(cost_matrix.shape[1]))
     matches, unmatched_a, unmatched_b = [], [], []
-    cost, x, y = lap.lapjv(cost_matrix, extend_cost=True, cost_limit=thresh)
+    cost_matrix=1-cost_matrix
+    cost, x, y = lap.lapjv(cost_matrix, extend_cost=True, cost_limit=iou_thresh)
     for ix, mx in enumerate(x):
         if mx >= 0:
             matches.append([ix, mx])# 返回的是匹配的索引 ix代表行，mx代表列 表示第ix行和第mx列匹配
@@ -100,9 +103,25 @@ def iou_distance(atracks, btracks):
     else:
         atlbrs = [track.tlbr for track in atracks]
         btlbrs = [track.tlbr for track in btracks]
-    _ious = ious(atlbrs, btlbrs)
-    cost_matrix = 1 - _ious
-    return cost_matrix
+    return ious(atlbrs, btlbrs)
+
+def hm_iou_distance(atracks, btracks):
+    iou_cost_matrix = iou_distance(atracks, btracks)
+    if iou_cost_matrix.size == 0:
+        return iou_cost_matrix
+
+    bboxes1 =np.array([track.tlbr for track in atracks])
+    bboxes2 =np.array([track.tlbr for track in btracks])
+    bboxes2 = np.expand_dims(bboxes2, 0)
+    bboxes1 = np.expand_dims(bboxes1, 1)
+
+    yy11 = np.maximum(bboxes1[..., 1], bboxes2[..., 1])
+    yy12 = np.minimum(bboxes1[..., 3], bboxes2[..., 3])
+
+    yy21 = np.minimum(bboxes1[..., 1], bboxes2[..., 1])
+    yy22 = np.maximum(bboxes1[..., 3], bboxes2[..., 3])
+    o = (yy12 - yy11) / (yy22 - yy21)
+    return iou_cost_matrix * o
 
 def embedding_distance(tracks, detections, metric='cosine'):
     """
@@ -186,17 +205,15 @@ def gate_cost_matrix(kf,cost_matrix, tracks, detections, only_position=False):
         cost_matrix[row, gating_distance > gating_threshold] = np.inf
     return cost_matrix
 
-def iou_distance_with_mds(tracks, detections):
-    cost_matrix = iou_distance(tracks, detections)
-    if cost_matrix.size == 0:
-        return cost_matrix
-    maha_cost_matrix = np.zeros_like(cost_matrix)
-    mask =  np.zeros_like(cost_matrix)
+def mds_distance(tracks, detections):
+
+    maha_cost_matrix = np.zeros((len(tracks), len(detections)), dtype=np.float64)
+    mask = np.zeros((len(tracks), len(detections)), dtype=np.float64)
     gating_threshold = chi2inv95[4]
     measurements = np.asarray([det.to_xyah() for det in detections])
     for row, track in enumerate(tracks):
         gating_distance = track.kalman_filter.gating_distance(
-            track.mean, track.covariance, measurements,only_position=False)
+            track.mean, track.covariance,measurements,only_position=False)
         maha_cost_matrix[row,:] = gating_distance
         mask[row,gating_distance > gating_threshold] = 1
         maha_cost_matrix[row,gating_distance > gating_threshold] = gating_threshold
@@ -204,10 +221,7 @@ def iou_distance_with_mds(tracks, detections):
     for row, track in enumerate(tracks):
         maha_cost_matrix[row,:] = nn.functional.softmax(torch.tensor(maha_cost_matrix[row,:]),dim=0).numpy()
     maha_cost_matrix[mask==1] = 0
-    cost_matrix = np.maximum(cost_matrix - 0.02 * maha_cost_matrix, 0)
-    #cost_matrix[mask==1] = np.inf
-    # assert  (cost_matrix>=0).all()
-    return cost_matrix
+    return maha_cost_matrix
 
 def fuse_motion(kf, cost_matrix, tracks, detections, only_position=False, lambda_=0.98):
     if cost_matrix.size == 0:
@@ -221,3 +235,97 @@ def fuse_motion(kf, cost_matrix, tracks, detections, only_position=False, lambda
         cost_matrix[row, gating_distance > gating_threshold] = np.inf
         cost_matrix[row] = lambda_ * cost_matrix[row] + (1 - lambda_) * gating_distance
     return cost_matrix
+
+
+def offset_distance(tracks, detections):
+
+
+    track_coords = np.array([track.offset for track in tracks])  # (m, d)
+    detection_coords = np.array([detection.offset for detection in detections])  # (n, d)
+
+    # Step 1: 归一化矩阵
+    track_norms = np.linalg.norm(track_coords, axis=1, keepdims=True)  # (m, 1)
+    detection_norms = np.linalg.norm(detection_coords, axis=1, keepdims=True)  # (n, 1)
+
+    track_normalized = track_coords / track_norms  # (m, d)
+    detection_normalized = detection_coords / detection_norms  # (n, d)
+
+    # Step 2: 计算余弦相似度矩阵
+    direction_cost_matrix = np.dot(track_normalized, detection_normalized.T)  # (m, n)
+    direction_cost_matrix = np.clip(direction_cost_matrix, -1.0, 1.0)
+    direction_cost_matrix = (np.pi/2-np.arccos(direction_cost_matrix))/np.pi
+    return direction_cost_matrix
+
+
+def assignment(cost_matrix, thresh=0.):
+    try:  # [hgx0411] goes here!
+        import lap
+        if thresh != 0:
+            _, x, y = lap.lapjv(cost_matrix, extend_cost=True, cost_limit=thresh)
+        else:
+            _, x, y = lap.lapjv(cost_matrix, extend_cost=True)
+        return np.array([[y[i], i] for i in x if i >= 0])
+    except ImportError:
+        from scipy.optimize import linear_sum_assignment
+        x, y = linear_sum_assignment(cost_matrix)
+        return np.array(list(zip(x, y)))
+
+
+def association(tracks, detections, iou_thresh,is_low=False):
+    iou_cost_matrix = hm_iou_distance(tracks, detections)
+    iou_thresh=1-iou_thresh
+    if iou_cost_matrix.size == 0:
+        return np.empty((0, 2), dtype=int), tuple(range(iou_cost_matrix.shape[0])), tuple(range(iou_cost_matrix.shape[1]))
+    # maha_cost_matrix = mds_distance(tracks, detections)
+    # cost_matrix = iou_cost_matrix + 0.02 * maha_cost_matrix
+    # if not is_low:
+    #     direction_cost_matrix = offset_distance(tracks, detections)
+    #     cost_matrix[direction_cost_matrix < 0] = -np.inf
+    # # score = np.array([detection.score for detection in detections]).reshape(1, -1)
+    # # direction_cost_matrix *= score
+    #
+    # cost_matrix[iou_cost_matrix<(1-iou_thresh)] = -np.inf
+    # #cost_matrix[maha_cost_matrix==0] = -np.inf
+    # cost,x,y=lap.lapjv(-cost_matrix, extend_cost=True, cost_limit=1e5)
+    # matches = []
+    # for ix, mx in enumerate(x):
+    #     if mx >= 0:
+    #         matches.append([ix, mx])
+    # matches = np.asarray(matches)
+    # unmatched_track = np.where(x < 0)[0]
+    # unmatched_detection = np.where(y < 0)[0]
+
+    if min(iou_cost_matrix.shape) > 0:
+        a = (iou_cost_matrix > iou_thresh).astype(np.int32)
+        if a.sum(1).max() == 1 and a.sum(0).max() == 1:
+            matched_indices = np.stack(np.where(a), axis=1)
+        else:
+            matched_indices =assignment(-(iou_cost_matrix))
+    else:
+        matched_indices = np.empty(shape=(0,2))
+
+
+    unmatched_trackers = []
+    for t, trk in enumerate(tracks):
+        if (t not in matched_indices[:, 0]):
+            unmatched_trackers.append(t)
+
+    unmatched_detections = []
+    for d, det in enumerate(detections):
+        if (d not in matched_indices[:, 1]):
+            unmatched_detections.append(d)
+
+    # filter out matched with low IOU
+    matches = []
+    for m in matched_indices:
+        if(iou_cost_matrix[m[0], m[1]]<iou_thresh):
+            unmatched_trackers.append(m[0])
+            unmatched_detections.append(m[1])
+        else:
+            matches.append(m.reshape(1,2))
+    if(len(matches)==0):
+        matches = np.empty((0,2),dtype=int)
+    else:
+        matches = np.concatenate(matches,axis=0)
+
+    return matches, np.array(unmatched_trackers),np.array(unmatched_detections)

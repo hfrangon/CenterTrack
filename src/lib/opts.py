@@ -226,7 +226,7 @@ class opts(object):
         self.parser.add_argument('--zero_tracking', action='store_true')
         self.parser.add_argument('--hungarian', action='store_true')
         self.parser.add_argument('--max_age', type=int, default=-1)
-
+        self.parser.add_argument('--track_type', type=str, default='cascade')
         # loss
         self.parser.add_argument('--tracking_weight', type=float, default=1)
         self.parser.add_argument('--reg_loss', default='l1',

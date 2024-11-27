@@ -74,7 +74,7 @@ class GenericDataset(data.Dataset):
         self.video_to_images = defaultdict(list)
         for image in self.coco.dataset['images']:
           self.video_to_images[image['video_id']].append(image)
-        # todo 可以用 video_to_images 获取到每个视频的所有帧信息 然后做ecc
+
       self.img_dir = img_dir
 
   def __getitem__(self, index):

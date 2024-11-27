@@ -8,7 +8,7 @@ python main.py tracking --exp_id mot17_half_sc --dataset mot --dataset_version 1
 python test.py tracking --exp_id mot17_half_sc --dataset mot --dataset_version 17halfval --pre_hm --ltrb_amodal --track_thresh 0.4 --new_thresh 0.5 --out_thresh 0.2 --pre_thresh 0.5 --resume --load_model ../models/dla_aff_simple_60.pth --trainval
 
 #val algorithm
-python test.py tracking --exp_id mot17_half_sc --dataset mot --dataset_version 17halfval --pre_hm --ltrb_amodal --track_thresh 0.4 --new_thresh 0.4 --out_thresh 0.2 --pre_thresh 0.4 --resume --load_model ../models/mot17_half.pth --arch dlav0_34 --trainval
+python test.py tracking --exp_id mot17_half_sc --dataset mot --dataset_version 17halfval --pre_hm --ltrb_amodal --track_thresh 0.4 --new_thresh 0.5 --out_thresh 0.2 --pre_thresh 0.5 --resume --load_model ../models/mot17_half.pth --arch dlav0_34 --trainval --track_type byte
 
 #test
 python test.py tracking --exp_id mot17_half_sc --dataset mot --dataset_version 17test --ltrb_amodal --track_thresh 0.4 --new_thresh 0.5 --out_thresh 0.2 --pre_thresh 0.5 --resume --load_model ../models/dla_aff_simple_60.pth
