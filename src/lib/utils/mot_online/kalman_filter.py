@@ -199,7 +199,7 @@ class KalmanFilter(object):
 
         return X_prior, covariance
 
-    def update(self, measure, covariance, measurement,confidence=.0):
+    def update(self, measure, covariance, measurement, confidence =.0):
         """Run Kalman filter correction step.
 
         Parameters
@@ -218,6 +218,10 @@ class KalmanFilter(object):
         (ndarray, ndarray)
             Returns the measurement-corrected state distribution.
 
+        Args:
+            confidence:
+            confidence:
+
         """
         # measure
         #
@@ -235,7 +239,8 @@ class KalmanFilter(object):
             kalman_gain, projected_cov, kalman_gain.T))
         return X_post, P_post
 
-    def gating_distance(self, measure, covariance, measurements,
+
+    def gating_distance(self,measure, covariance, measurements,
                         only_position=False, metric='maha'):
         """Compute gating distance between state distribution and measurements.
         A suitable distance threshold can be obtained from `chi2inv95`. If

@@ -39,6 +39,8 @@ class opts(object):
                                       'set load_model to model_last.pth '
                                       'in the exp dir if load_model is empty.')
         self.parser.add_argument('--init', action='store_true',)
+        self.parser.add_argument('--use_MDS', action='store_true')
+
         # system
         self.parser.add_argument('--gpus', default='0',
                                  help='-1 for CPU, use comma for multiple gpus')
@@ -224,7 +226,7 @@ class opts(object):
         self.parser.add_argument('--zero_tracking', action='store_true')
         self.parser.add_argument('--hungarian', action='store_true')
         self.parser.add_argument('--max_age', type=int, default=-1)
-
+        self.parser.add_argument('--track_type', type=str, default='cascade')
         # loss
         self.parser.add_argument('--tracking_weight', type=float, default=1)
         self.parser.add_argument('--reg_loss', default='l1',
@@ -321,7 +323,12 @@ class opts(object):
         opt.root_dir = os.path.join(os.path.dirname(__file__), '', '..', '', '..')
         opt.data_dir = os.path.join(opt.root_dir, 'data')
         opt.exp_dir = os.path.join(opt.root_dir, 'exp', opt.task)
-        opt.save_dir = os.path.join(opt.exp_dir, opt.exp_id)
+        if opt.trainval:
+            opt.save_dir = os.path.join(opt.root_dir, 'src', 'tools', 'TrackEval', 'data', 'trackers', 'mot_challenge',
+                                        'MOT17-train', 'CenterTrack', 'data')
+        else:
+            opt.save_dir = os.path.join(opt.root_dir,'exp','results')
+
         opt.debug_dir = os.path.join(opt.save_dir, 'debug')
 
         if opt.resume and opt.load_model == '':

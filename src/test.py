@@ -21,8 +21,8 @@ from lib.detector import Detector
 
 class PrefetchDataset(torch.utils.data.Dataset):
   def __init__(self, opt, dataset, pre_process_func):
-    self.images = dataset.images
-    self.load_image_func = dataset.coco.loadImgs
+    self.images = dataset.images# json中的images id
+    self.load_image_func = dataset.coco.loadImgs#函数 通过imageid 获取image信息
     self.img_dir = dataset.img_dir
     self.pre_process_func = pre_process_func
     self.get_default_calib = dataset.get_default_calib
@@ -31,7 +31,7 @@ class PrefetchDataset(torch.utils.data.Dataset):
   def __getitem__(self, index):
     img_id = self.images[index]
     img_info = self.load_image_func(ids=[img_id])[0]
-    img_path = os.path.join(self.img_dir, img_info['file_name'])
+    img_path = os.path.join(self.img_dir, img_info['file_name'])# 这个file_name是图片的名字
     image = cv2.imread(img_path)
     images, meta = {}, {}
     for scale in opt.test_scales:
@@ -45,6 +45,7 @@ class PrefetchDataset(torch.utils.data.Dataset):
     if 'frame_id' in img_info and img_info['frame_id'] == 1:
       ret['is_first_frame'] = 1
       ret['video_id'] = img_info['video_id']
+    ret['file_name'] = img_info['file_name']  # 用于获取图片的名
     return img_id, ret
 
   def __len__(self):
@@ -58,7 +59,7 @@ def prefetch_test(opt):
   print(opt)
   Logger(opt)
   
-  split = 'val' if not opt.trainval else 'test'
+  split = 'val' if opt.trainval else 'test'
   dataset = Dataset(opt, split)
   detector = Detector(opt)
   
@@ -72,7 +73,7 @@ def prefetch_test(opt):
     load_results = {}
 
   data_loader = torch.utils.data.DataLoader(
-    PrefetchDataset(opt, dataset, detector.pre_process), 
+    PrefetchDataset(opt, dataset, detector.pre_process),
     batch_size=1, shuffle=False, pin_memory=True)
 
   results = {}
@@ -121,13 +122,13 @@ def prefetch_test(opt):
     else:
       bar.next()
   bar.finish()
-  if opt.save_results:
-    print('saving results to', opt.save_dir + '/save_results_{}{}.json'.format(
-      opt.test_dataset, opt.dataset_version))
-    json.dump(_to_list(copy.deepcopy(results)), 
-              open(opt.save_dir + '/save_results_{}{}.json'.format(
-                opt.test_dataset, opt.dataset_version), 'w'))
-  dataset.run_eval(results, opt.save_dir)
+  # print('saving results to', opt.save_dir + '/save_results_{}{}.json'.format(
+  #   opt.test_dataset, opt.dataset_version))
+  # json.dump(_to_list(copy.deepcopy(results)),
+  #           open(opt.save_dir + '/save_results_{}{}.json'.format(
+  #             opt.test_dataset, opt.dataset_version), 'w'))
+
+  dataset.run_eval(results, opt.save_dir,opt.trainval)
 
 def test(opt):
   os.environ['CUDA_VISIBLE_DEVICES'] = opt.gpus_str

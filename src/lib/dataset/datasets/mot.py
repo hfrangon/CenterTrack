@@ -50,7 +50,7 @@ class MOT(GenericDataset):
     return self.num_samples
 
   def save_results(self, results, save_dir):
-    results_dir = os.path.join(save_dir, 'results_mot{}'.format(self.dataset_version))
+    results_dir = save_dir
     if not os.path.exists(results_dir):
       os.mkdir(results_dir)
     for video in self.coco.dataset['videos']:
@@ -82,16 +82,33 @@ class MOT(GenericDataset):
             t[0], rename_track_id, t[1], t[2], t[3]-t[1], t[4]-t[2]))
       f.close()
   
-  def run_eval(self, results, save_dir):
+  def run_eval(self, results, save_dir,trainval):
     self.save_results(results, save_dir)
-    gt_type_str = '{}'.format(
-                '_train_half' if '17halftrain' in self.opt.dataset_version \
-                else '_val_half' if '17halfval' in self.opt.dataset_version \
-                else '')
-    gt_type_str = '_val_half' if self.year in [16, 19] else gt_type_str
-    gt_type_str = '--gt_type {}'.format(gt_type_str) if gt_type_str != '' else \
-      ''
-    os.system('python tools/eval_motchallenge.py ' + \
-              '../data/mot{}/{}/ '.format(self.year, 'train') + \
-              '{}/results_mot{}/ '.format(save_dir, self.dataset_version) + \
-              gt_type_str + ' --eval_official')
+    # # gt_type_str = '{}'.format(
+    # #             '_train_half' if '17halftrain' in self.opt.dataset_version \
+    # #             else '_val_half' if '17halfval' in self.opt.dataset_version \
+    # #             else '')
+    # # gt_type_str = '_val_half' if self.year in [16, 19] else gt_type_str
+    # # gt_type_str = '--gt_type {}'.format(gt_type_str) if gt_type_str != '' else \
+    #   ''
+
+    #split = 'train' if trainval else 'test'
+    if trainval:
+      os.system(
+        'python tools/TrackEval/scripts/run_mot_challenge.py ' +
+        '--BENCHMARK MOT17 ' +
+        '--SPLIT_TO_EVAL train ' +
+        '--TRACKERS_TO_EVAL CenterTrack ' +
+        '--METRICS HOTA CLEAR Identity VACE ' +
+        '--TIME_PROGRESS False ' +
+        '--USE_PARALLEL False ' +
+        '--NUM_PARALLEL_CORES 1 ' +
+        '--GT_LOC_FORMAT {gt_folder}/{seq}/gt/gt_val_half.txt'
+      )
+
+    # os.system('python tools/eval_motchallenge.py ' + \
+    #           '../data/mot{}/{}/ '.format(self.year, 'train') + \
+    #           '{}/results_mot{}/ '.format(save_dir, self.dataset_version) + \
+    #           gt_type_str + ' --eval_official')
+    # python TrackEval/scripts/run_mot_challenge.py --BENCHMARK MOT17 --SPLIT_TO_EVAL train --TRACKERS_TO_EVAL ByteTrack --METRICS HOTA CLEAR Identity VACE --TIME_PROGRESS False --USE_PARALLEL False --NUM_PARALLEL_CORES 1  --GT_FOLDER datasets/mot/ --TRACKERS_FOLDER YOLOX_outputs/yolox_s_mot17_half_repro1/track_results_ByteTrack/track_results --GT_LOC_FORMAT {gt_folder}/{seq}/gt/gt_val_half.txt
+    print('Done!!!\n')

@@ -46,7 +46,7 @@ class BaseTrack(object):
         raise NotImplementedError
 
     def mark_lost(self):
-        self.state = TrackState.Lost
+        raise NotImplementedError
 
     def mark_removed(self):
         self.state = TrackState.Removed

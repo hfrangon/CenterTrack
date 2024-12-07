@@ -31,6 +31,7 @@ preds/*
 *.h5
 *.pth
 *.checkpoint
+example*.txt
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
