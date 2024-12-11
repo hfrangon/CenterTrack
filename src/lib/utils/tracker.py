@@ -2,13 +2,11 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-import math
-
 import numpy as np
-from scipy.optimize import linear_sum_assignment as linear_assignment
 import copy
 from sklearn.gaussian_process import GaussianProcessRegressor as GPR
 from sklearn.gaussian_process.kernels import RBF
+
 
 from .cmc.file import GmcFile
 from .mot_online.kalman_filter import KalmanFilter
@@ -78,34 +76,37 @@ class STrack(BaseTrack):
         self.__dict__ = self.attr_saved
         self.state = TrackState.Tracked#important 用于predict使用速度
         time_gap = index2 - index1
-        # if time_gap < 10:
-        #     dx = (x2 - x1) / time_gap
-        #     dy = (y2 - y1) / time_gap
-        #     dw = (w2 - w1) / time_gap
-        #     dh = (h2 - h1) / time_gap
-        #     for i in range(time_gap - 1):
-        #         x = x1 + (i + 1) * dx
-        #         y = y1 + (i + 1) * dy
-        #         w = w1 + (i + 1) * dw
-        #         h = h1 + (i + 1) * dh
-        #         self.mean, self.covariance = self.kalman_filter.update(
-        #             self.mean, self.covariance, np.array([x, y, w / float(h), h],new_track.score)
-        #         )
-        #         self.predict()
-        # else:
-        interpolation_array = STrack.gaussian_smooth(x1, y1, w1, h1, x2, y2, w2, h2, index1, index2)
+        dx = (x2 - x1) / time_gap
+        dy = (y2 - y1) / time_gap
+        dw = (w2 - w1) / time_gap
+        dh = (h2 - h1) / time_gap
         for i in range(time_gap - 1):
-            x, y, w, h = interpolation_array[i, 1:]
+            x = x1 + (i + 1) * dx
+            y = y1 + (i + 1) * dy
+            w = w1 + (i + 1) * dw
+            h = h1 + (i + 1) * dh
             self.mean, self.covariance = self.kalman_filter.update(
                 self.mean, self.covariance, np.array([x, y, w / float(h), h],new_track.score)
             )
             self.predict()
+        # else:
+        # interpolation_array = STrack.gaussian_smooth(x1, y1, w1, h1, x2, y2, w2, h2, index1, index2)
+        # for i in range(time_gap - 1):
+        #     x, y, w, h = interpolation_array[i, 1:]
+        #     self.mean, self.covariance = self.kalman_filter.update(
+        #         self.mean, self.covariance, np.array([x, y, w / float(h), h],new_track.score)
+        #     )
+        #     self.predict()
         self.update(new_track, frame_id)
         self.tracklet_len = 0
 
     def calculate_score(self):
-        if self.time_since_update != 0:
-            self.score = max(0,np.exp(-self.time_since_update/30)*self.score)
+        if self.time_since_update==1:
+            self.origin_score = self.score
+        else:
+            self.score = self.origin_score*np.exp(-0.1*self.time_since_update)
+
+
 
     def update(self, new_track, frame_id,cost=1.0):
         """
@@ -297,16 +298,16 @@ class BYTETracker(object):
         # below has no effect to final output, just to be compatible to codebase
         self.id_count = 0
 
-    def step(self,results,img_info):
-        if self.args.track_type =='3':
-            return self.step_3(results,img_info)
+    def step(self,results,file_name=None,meta_info=None):
+        if self.args.track_type =='1':
+            return self.step_1(results,file_name)
         elif self.args.track_type =='2':
-            return self.step_3_origin(results,img_info)
-        elif self.args.track_type =='byte':
-            return self.step_byte(results,img_info)
+            return self.step_byte(results,file_name)
+        elif self.args.track_type =='3':
+            return self.step_3(results,file_name)
         else:
             raise ValueError('not support track type')
-    def step_3(self,results,img_info=None):
+    def step_1(self,results,file_name,meta_info=None):
         self.frame_id += 1
         activated_starcks = []
         refind_stracks = []
@@ -317,20 +318,11 @@ class BYTETracker(object):
         bboxes = np.vstack([item['bbox'] for item in results if item['class'] == 1])  # N x 4, x1y1x2y2
         offsets = np.array([item['tracking'] for item in results if item['class'] == 1], np.float32)
         ct = np.array([item['ct'] for item in results if item['class'] == 1], np.float32)
-
         remain_inds = scores >= self.args.track_thresh
         dets = bboxes[remain_inds]
         scores_keep = scores[remain_inds]
         offsets_keep = offsets[remain_inds]
         ct_keep = ct[remain_inds]
-
-        inds_low = scores > self.args.out_thresh
-        inds_high = scores < self.args.track_thresh
-        inds_second = np.logical_and(inds_low, inds_high)
-        dets_second = bboxes[inds_second]
-        scores_second = scores[inds_second]
-        offsets_second = offsets[inds_second]
-        ct_second = ct[inds_second]
 
         if len(dets) > 0:
             '''Detections'''
@@ -354,14 +346,14 @@ class BYTETracker(object):
 
         # cmc
         # Fix camera motion
-        matrix = GmcFile.apply(img_info, self.args.trainval)
+        matrix = GmcFile.apply(file_name, self.args.trainval)
         for track in strack_pool:
             track.camera_update(matrix)
         for track in unconfirmed:
             track.camera_update(matrix)
 
         '''first association, tracks and high score detection but with different boost'''
-        matches, u_track, u_detection = matching.first_association(strack_pool, detections,
+        matches, u_track, u_detection = matching.association(strack_pool, detections,
                                                                    iou_thresh=self.args.match_thresh)
         for itracked, idet in matches:
             track = strack_pool[itracked]
@@ -372,32 +364,6 @@ class BYTETracker(object):
             else:
                 track.re_activate(det, self.frame_id)
                 refind_stracks.append(track)
-        ''' Step 3: Second association, association the untrack to the low score detections， with IOU'''
-        if len(dets_second) > 0:
-            '''Detections'''
-            detections_second = [STrack(STrack.tlbr_to_tlwh(tlbr), s, ct, offset) for
-                                 (tlbr, s, ct, offset) in zip(dets_second, scores_second, ct_second, offsets_second)]
-        else:
-            detections_second = []
-        r_tracked_stracks = [strack_pool[i] for i in u_track if strack_pool[i].state == TrackState.Tracked]
-
-        matches, u_track, u_detection_second = matching.association(r_tracked_stracks, detections_second,
-                                                                    iou_thresh=0.5, is_low=True)
-        for itracked, idet in matches:
-            track = r_tracked_stracks[itracked]
-            det = detections_second[idet]
-            if track.state == TrackState.Tracked:
-                track.update(det, self.frame_id)
-                activated_starcks.append(track)
-            else:
-                track.re_activate(det, self.frame_id, new_id=False)
-                refind_stracks.append(track)
-
-        for it in u_track:
-            track = r_tracked_stracks[it]
-            if not track.state == TrackState.Lost:
-                track.mark_lost()
-                lost_stracks.append(track)
 
         '''Deal with unconfirmed tracks, usually tracks with only one beginning frame'''
         detections = [detections[i] for i in u_detection]
@@ -424,77 +390,8 @@ class BYTETracker(object):
                 track.mark_removed()
                 removed_stracks.append(track)
         return self.merge_result(activated_starcks, refind_stracks, lost_stracks, removed_stracks)
-        # '''first association, high score track and high score detection'''
-        # tracks = [track for track in strack_pool if track.score >= self.args.track_thresh]
-        # matches, u_track, u_detection = matching.association(tracks, detections, iou_thresh=self.args.match_thresh, is_low=False)
-        # for itracked, idet in matches:
-        #     track = tracks[itracked]
-        #     det = detections[idet]
-        #     if track.state == TrackState.Tracked:
-        #         track.update(detections[idet], self.frame_id)
-        #         activated_starcks.append(track)
-        #     else:
-        #         track.re_activate(det, self.frame_id)
-        #         refind_stracks.append(track)
-        #
-        # '''second association, low score track and low score detection'''
-        # tracks_second = [track for track in strack_pool if track.score < self.args.track_thresh]
-        # if len(dets_second) > 0:
-        #     '''Detections'''
-        #     detections_second = [STrack(STrack.tlbr_to_tlwh(tlbr), s, ct, offset) for
-        #                   (tlbr, s, ct, offset) in zip(dets_second, scores_second, ct_second, offsets_second)]
-        # else:
-        #     detections_second = []
-        # matches, u_track_second, u_detection_second = matching.association(tracks_second, detections_second, iou_thresh=0.5,
-        #                                                      is_low=True)
-        # for itracked, idet in matches:
-        #     track = tracks_second[itracked]
-        #     det = detections_second[idet]
-        #     if track.state == TrackState.Tracked:
-        #         track.update(det, self.frame_id)
-        #         activated_starcks.append(track)
-        #     else:
-        #         track.re_activate(det, self.frame_id, new_id=False)
-        #         refind_stracks.append(track)
-        #
-        # '''third association,remain tracks and remain detections'''
-        # remain_tracks = [tracks[i] for i in u_track]+[tracks_second[i] for i in u_track_second]+unconfirmed
-        # remain_detections = [detections[i] for i in u_detection]+[detections_second[i] for i in u_detection_second]
-        # matches, u_track_remain, u_detection_remain = matching.association(remain_tracks, remain_detections, iou_thresh=0.6, is_low=True)
-        # for itracked, idet in matches:
-        #     track = remain_tracks[itracked]
-        #     det = remain_detections[idet]
-        #     if track.state == TrackState.Tracked or not track.is_activated:
-        #         track.update(det, self.frame_id)
-        #         activated_starcks.append(track)
-        #     else:
-        #         track.update(det, self.frame_id)
-        #         refind_stracks.append(track)
-        #
-        # for it in u_track_remain:
-        #     track = remain_tracks[it]
-        #     if not track.is_activated:
-        #         track.mark_removed()
-        #         removed_stracks.append(track)
-        #     elif not track.state == TrackState.Lost and track.is_activated:
-        #         track.mark_lost()
-        #         lost_stracks.append(track)
-        #
-        # '''step 4 init new stracks'''
-        # for it in u_detection_remain:
-        #     track = remain_detections[it]
-        #     if track.score > self.det_thresh:
-        #         track.activate(self.kalman_filter, self.frame_id)
-        #         activated_starcks.append(track)
-        #
-        # """ Step 5: Update state"""
-        # for track in self.lost_stracks:
-        #     if self.frame_id - track.end_frame > self.max_time_lost:
-        #         track.mark_removed()
-        #         removed_stracks.append(track)
 
-        return self.merge_result(activated_starcks, refind_stracks, lost_stracks, removed_stracks)
-    def step_3_origin(self, results,img_info=None):
+    def step_3(self, results,file_name,meta_info=None):
         self.frame_id += 1
         activated_starcks = []
         refind_stracks = []
@@ -544,7 +441,7 @@ class BYTETracker(object):
 
         # cmc
         # Fix camera motion
-        matrix = GmcFile.apply(img_info, self.args.trainval)
+        matrix = GmcFile.apply(file_name, self.args.trainval)
         for track in strack_pool:
             track.camera_update(matrix)
         for track in unconfirmed:
@@ -553,9 +450,8 @@ class BYTETracker(object):
 
         tracks = [track for track in strack_pool if track.score>= self.args.track_thresh]
         tracks_second =[track for track in strack_pool if track.score < self.args.track_thresh]
-
         # dists = matching.fuse_motion(self.kalman_filter, dists, strack_pool, detections)
-        matches, u_track, u_detection = matching.association(tracks,detections, iou_thresh=self.args.match_thresh,is_low=True)
+        matches, u_track, u_detection = matching.association(tracks,detections, iou_thresh=self.args.match_thresh,is_low=False)
 
         for itracked, idet in matches:
             track = tracks[itracked]
@@ -766,9 +662,9 @@ class BYTETracker(object):
         self.removed_stracks.extend(removed_stracks)
         self.tracked_stracks, self.lost_stracks = remove_duplicate_stracks(self.tracked_stracks, self.lost_stracks)
         output_stracks = [track for track in self.tracked_stracks if track.is_activated]
-        # for track in self.lost_stracks:
-        #     track.calculate_score()
-        #output_stracks += [track for track in self.lost_stracks if track.score>0.8]
+        for track in self.lost_stracks:
+            track.calculate_score()
+        output_stracks += [track for track in self.lost_stracks if track.score>0.6]
         ret = []
         for track in output_stracks:
             track_dict = {}
@@ -776,7 +672,7 @@ class BYTETracker(object):
             track_dict['bbox'] = track.tlbr
             bbox = track_dict['bbox']
             track_dict['ct'] = [(bbox[0] + bbox[2]) / 2, (bbox[1] + bbox[3]) / 2]
-            track_dict['active'] = 1 if track.is_activated else 0
+            track_dict['active'] = 1
             track_dict['tracking_id'] = track.track_id
             track_dict['class'] = 1
 

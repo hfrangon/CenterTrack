@@ -18,6 +18,7 @@ from utils.image import draw_umich_gaussian, gaussian_radius
 from utils.post_process import generic_post_process
 from utils.debugger import Debugger
 from utils.tracker import BYTETracker as Tracker
+#from utils.center_tracker import Tracker
 from dataset.dataset_factory import get_dataset
 
 
@@ -148,7 +149,7 @@ class Detector(object):
       # public detection mode in MOT challenge
       public_det = meta['cur_dets'] if self.opt.public_det else None
       # add tracking id to results
-      results = self.tracker.step(results,img_info=pre_processed_images['file_name'][0])
+      results = self.tracker.step(results,file_name=pre_processed_images['file_name'][0],meta_info=pre_processed_images['meta'][1])
       self.pre_images = images
 
     tracking_time = time.time()
