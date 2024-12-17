@@ -320,10 +320,10 @@ class DLA(nn.Module):
         if pre_img is not None:
             x = x + self.pre_img_layer(pre_img)
         # 原本直接相加进行特征融合
-        if pre_hm is not None:
-            x = x + self.pre_hm_layer(pre_hm)
-        # pre_hm = self.pre_hm_layer(pre_hm)
-        # x = self.spatial(x, pre_hm)
+        # if pre_hm is not None:
+        #     x = x + self.pre_hm_layer(pre_hm)
+        pre_hm = self.pre_hm_layer(pre_hm)
+        x = self.spatial(x, pre_hm)
         for i in range(6):
             x = getattr(self, 'level{}'.format(i))(x)
             y.append(x)

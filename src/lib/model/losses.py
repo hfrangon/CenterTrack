@@ -97,6 +97,18 @@ class FastFocalLoss(nn.Module):
     if num_pos == 0:
       return - neg_loss
     return - (pos_loss + neg_loss) / num_pos
+class GenericFocalLoss(nn.Module):
+    def __init__(self, opt=None):
+        super(GenericFocalLoss, self).__init__()
+        self.only_neg_loss = _only_neg_loss
+    def forward(self, out, target, ind, mask, cat):
+        num_pos = mask.sum()
+        neg_loss = self.only_neg_loss(out, target)
+        if num_pos == 0:
+            return - neg_loss
+        loss = torch.pow((out - target), 2) * ((1 - target) * torch.log(1 - out) + target * torch.log(out))
+        loss = loss.sum()
+        return  -loss/num_pos
 
 def _reg_loss(regr, gt_regr, mask):
   ''' L1 regression loss

@@ -8,6 +8,7 @@ import numpy as np
 from progress.bar import Bar
 
 from model.data_parallel import DataParallel
+from src.lib.model.losses import GenericFocalLoss
 from utils.utils import AverageMeter
 
 from model.losses import FastFocalLoss, RegWeightedL1Loss
@@ -20,7 +21,7 @@ from utils.post_process import generic_post_process
 class GenericLoss(torch.nn.Module):
   def __init__(self, opt):
     super(GenericLoss, self).__init__()
-    self.crit = FastFocalLoss(opt=opt)
+    self.crit = GenericFocalLoss(opt=opt)
     self.crit_reg = RegWeightedL1Loss()
     if 'rot' in opt.heads:
       self.crit_rot = BinRotLoss()
