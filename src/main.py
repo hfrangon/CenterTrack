@@ -102,11 +102,6 @@ def main(opt):
         if epoch in opt.save_point:
             save_model(os.path.join(opt.save_dir, 'model_{}.pth'.format(epoch)),
                        epoch, model, optimizer)
-        # if epoch in opt.lr_step:
-        #     lr = opt.lr * (0.1 ** (opt.lr_step.index(epoch) + 1))
-        #     print('Drop LR to', lr)
-        #     for param_group in optimizer.param_groups:
-        #         param_group['lr'] = lr
     logger.close()
 
 

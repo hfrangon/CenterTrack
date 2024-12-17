@@ -166,7 +166,6 @@ class Trainer(object):
         self.optimizer.zero_grad()
         loss.backward()
         self.optimizer.step()
-        self.scheduler.step()
       batch_time.update(time.time() - end)
       end = time.time()
 
@@ -189,7 +188,8 @@ class Trainer(object):
         self.debug(batch, output, iter_id, dataset=data_loader.dataset)
       
       del output, loss, loss_stats
-    
+    if phase == 'train' and self.scheduler is not None:
+        self.scheduler.step()
     bar.finish()
     ret = {k: v.avg for k, v in avg_loss_stats.items()}
     ret['time'] = bar.elapsed_td.total_seconds() / 60.
