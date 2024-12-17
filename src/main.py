@@ -33,7 +33,7 @@ def get_optimizer(opt, model):
 
 
 def main(opt):
-    torch.manual_seed(opt.seed)#todo Torch.manual_seed(3407) is all you need
+    torch.manual_seed(opt.seed)
     torch.backends.cudnn.benchmark = not opt.not_cuda_benchmark and not opt.test
     Dataset = get_dataset(opt.dataset)
     opt = opts().update_dataset_info_and_set_heads(opt, Dataset)

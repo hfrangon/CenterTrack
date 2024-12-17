@@ -86,9 +86,10 @@ class FastFocalLoss(nn.Module):
       ind, mask: B x M
       cat (category id for peaks): B x M
     '''
+    #todo 在这里计算正负样本的loss
     neg_loss = self.only_neg_loss(out, target)
     pos_pred_pix = _tranpose_and_gather_feat(out, ind) # B x M x C
-    pos_pred = pos_pred_pix.gather(2, cat.unsqueeze(2)) # B x M
+    pos_pred = pos_pred_pix.gather(2, cat.unsqueeze(2)) # B x M# 只获取了peak处的预测值
     num_pos = mask.sum()
     pos_loss = torch.log(pos_pred) * torch.pow(1 - pos_pred, 2) * \
                mask.unsqueeze(2)

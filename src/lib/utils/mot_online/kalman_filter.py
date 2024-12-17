@@ -71,7 +71,9 @@ class KalmanFilter(object):
         # 初始化有哪些 A H Q R 矩阵 x0 P0
         mean_pos = measurement # x y a h 观测值(z)
         mean_vel = np.zeros_like(mean_pos)
-        measure = np.r_[mean_pos, mean_vel]# 初始变化为0
+        # mean_vel[0] = velocity[0]
+        # mean_vel[1] = velocity[1]
+        measure = np.r_[mean_pos, mean_vel]
 
         std = [
             2 * self._std_weight_position * measurement[3],

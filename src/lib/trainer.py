@@ -30,7 +30,7 @@ class GenericLoss(torch.nn.Module):
 
   def _sigmoid_output(self, output):
     if 'hm' in output:
-      output['hm'] = _sigmoid(output['hm'])
+      output['hm'] = _sigmoid(output['hm'])#todo 为什么还要对hm的输出用sigmoid
     if 'hm_hp' in output:
       output['hm_hp'] = _sigmoid(output['hm_hp'])
     if 'dep' in output:
