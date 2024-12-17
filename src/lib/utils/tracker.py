@@ -452,7 +452,7 @@ class BYTETracker(object):
         tracks_second =[track for track in strack_pool if track.score < self.args.track_thresh]
         # dists = matching.fuse_motion(self.kalman_filter, dists, strack_pool, detections)
         matches, u_track, u_detection = matching.association(tracks,detections, iou_thresh=self.args.match_thresh,is_low=False)
-
+        #todo 先匹配高分的检测和追踪   然后级联匹配 低分检测和低分追踪
         for itracked, idet in matches:
             track = tracks[itracked]
             det = detections[idet]

@@ -17,7 +17,7 @@ import pycocotools.coco as coco
 
 import torch.utils.data as data
 
-from utils.image import get_affine_transform, affine_transform, color_aug, flip, draw_umich_gaussian,gaussian_radius
+from ..utils.image import get_affine_transform, affine_transform, color_aug, flip, draw_umich_gaussian,gaussian_radius
 
 
 import copy
@@ -72,7 +72,7 @@ class GenericDataset(data.Dataset):
           self.fake_video_data()
         print('Creating video index!')
         self.video_to_images = defaultdict(list)
-        for image in self.coco.dataset['images']:
+        for image in self.coco.dataset['images']:#self.coco.dataset是训练需要的Json文件
           self.video_to_images[image['video_id']].append(image)
 
       self.img_dir = img_dir
@@ -133,7 +133,7 @@ class GenericDataset(data.Dataset):
     calib = self._get_calib(img_info, width, height)
     
     num_objs = min(len(anns), self.max_objs)
-    for k in range(num_objs):
+    for k in range(num_objs):#anns为一帧中所有的gt_box
       ann = anns[k]
       cls_id = int(self.cat_ids[ann['category_id']])
       if cls_id > self.opt.num_classes or cls_id <= -999:
@@ -430,7 +430,7 @@ class GenericDataset(data.Dataset):
     h, w = bbox[3] - bbox[1], bbox[2] - bbox[0]
     if h <= 0 or w <= 0:
       return
-    radius = gaussian_radius((math.ceil(h), math.ceil(w)))
+    radius = gaussian_radius((math.ceil(h), math.ceil(w)))#todo 在这里修改高斯核的大小
     radius = max(0, int(radius)) 
     ct = np.array(
       [(bbox[0] + bbox[2]) / 2, (bbox[1] + bbox[3]) / 2], dtype=np.float32)
@@ -441,7 +441,7 @@ class GenericDataset(data.Dataset):
       ret['wh'][k] = 1. * w, 1. * h
       ret['wh_mask'][k] = 1
     ret['ind'][k] = ct_int[1] * self.opt.output_w + ct_int[0]
-    ret['reg'][k] = ct - ct_int
+    ret['reg'][k] = ct - ct_int#reg是中心点的偏移量用于补偿整数化的损失
     ret['reg_mask'][k] = 1
     draw_umich_gaussian(ret['hm'][cls_id - 1], ct_int, radius)
 
@@ -457,7 +457,7 @@ class GenericDataset(data.Dataset):
         pre_ct = pre_cts[track_ids.index(ann['track_id'])]
         ret['tracking_mask'][k] = 1
         ret['tracking'][k] = pre_ct - ct_int
-        gt_det['tracking'].append(ret['tracking'][k])
+        gt_det['tracking'].append(ret['tracking'][k])#tracking为同一id的前后两帧的中心点的偏移量
       else:
         gt_det['tracking'].append(np.zeros(2, np.float32))
 
