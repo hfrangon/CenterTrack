@@ -97,6 +97,7 @@ class FastFocalLoss(nn.Module):
     if num_pos == 0:
       return - neg_loss
     return - (pos_loss + neg_loss) / num_pos
+
 class GenericFocalLoss(nn.Module):
     def __init__(self, opt=None):
         super(GenericFocalLoss, self).__init__()

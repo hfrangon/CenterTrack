@@ -21,7 +21,7 @@ from utils.post_process import generic_post_process
 class GenericLoss(torch.nn.Module):
   def __init__(self, opt):
     super(GenericLoss, self).__init__()
-    self.crit = GenericFocalLoss(opt=opt)
+    self.crit = FastFocalLoss(opt=opt)
     self.crit_reg = RegWeightedL1Loss()
     if 'rot' in opt.heads:
       self.crit_rot = BinRotLoss()

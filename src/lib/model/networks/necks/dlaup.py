@@ -2,16 +2,10 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-import os
-import math
-import logging
-import numpy as np
-from os.path import join
 
-import torch
+import math
+import numpy as np
 from torch import nn
-import torch.nn.functional as F
-import torch.utils.model_zoo as model_zoo
 
 try:
   from ..DCNv2.dcn_v2 import DCN

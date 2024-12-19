@@ -63,6 +63,8 @@ class iAFF(nn.Module):
         self.sigmoid = nn.Sigmoid()
 
     def forward(self, x, residual):
+        if residual is None:
+            residual=x
         xa = x + residual
         xl = self.local_att(xa)
         xg = self.global_att(xa)

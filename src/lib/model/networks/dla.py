@@ -317,8 +317,8 @@ class DLA(nn.Module):
         y = []
         x = self.base_layer(x)
         #print(f"x shape {x.shape}")
-        if pre_img is not None:
-            x = x + self.pre_img_layer(pre_img)
+        # if pre_img is not None:
+        #     x = x + self.pre_img_layer(pre_img)
         # 原本直接相加进行特征融合
         # if pre_hm is not None:
         #     x = x + self.pre_hm_layer(pre_hm)
@@ -634,15 +634,6 @@ class DLASeg(BaseModel):
             heads, head_convs, 1, 64 if num_layers == 34 else 128, opt=opt)
         down_ratio=4
         self.opt = opt
-        self.fuse = iAFF(64)
-        if opt.init:
-            for model in self.fuse.modules():
-                if isinstance(model, nn.Conv2d):
-                    nn.init.kaiming_normal_(model.weight, mode='fan_out', nonlinearity='relu')
-                elif isinstance(model, (nn.BatchNorm2d, nn.GroupNorm)):
-                    nn.init.constant_(model.weight, 1)
-                    nn.init.constant_(model.bias, 0)
-
         self.node_type = DLA_NODE[opt.dla_node]
         print('Using node type:', self.node_type)
         self.first_level = int(np.log2(down_ratio))
@@ -655,12 +646,14 @@ class DLASeg(BaseModel):
             self.first_level, channels[self.first_level:], scales,
             node_type=self.node_type)
         out_channel = channels[self.first_level]
-
+        self.fuse = iAFF(out_channel)
+        for i in range(len(channels)):
+            setattr(self,'iAFF_'+str(i),iAFF(channels=channels[i]))
         self.ida_up = IDAUp(
             out_channel, channels[self.first_level:self.last_level], 
             [2 ** i for i in range(self.last_level - self.first_level)],
             node_type=self.node_type)
-        
+        self.pre_img_feature = [None for _ in range(len(channels))]
 
     def img2feats(self, x):
         x = self.base(x)
@@ -675,13 +668,17 @@ class DLASeg(BaseModel):
 
     def imgpre2feats(self, x, pre_img=None, pre_hm=None):
         x = self.base(x, pre_img, pre_hm)
-        x = self.dla_up(x)
+        x_fuse = [None for _ in range(len(x))]
+        for i in range(len(x)):
+            x_fuse[i] = getattr(self,'iAFF_'+str(i))(x[i],self.pre_img_feature[i])
+        self.pre_img_feature = [feat.detach() for feat in x]
+        
+        x = self.dla_up(x_fuse)
 
         y = []
         for i in range(self.last_level - self.first_level):
             y.append(x[i].clone())
         self.ida_up(y, 0, len(y))
 
-        if self.fuse is not None:
-            self.fuse(y[-1], y[-1])
+        self.fuse(y[-1], y[-1])
         return [y[-1]]
